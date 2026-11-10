@@ -1,26 +1,169 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --bg: #f5f6f3;
+  --surface: #ffffff;
+  --ink: #15171a;
+  --muted: #5a6067;
+  --line: #e2e4df;
+  --line2: #eef0ec;
+  --accent: #0e6b5c;
+  --accent-hover: #0a564a;
+  --on-accent: #ffffff;
+  --accent-soft: #e2f1ed;
+  --accent-ink: #0a4f44;
+  --link: #0e6b5c;
+  --warn: #b4480f;
+  --warn-soft: #fcebdd;
+  --warn-line: #f1cbad;
+  --warn-ink: #7a3410;
+  --green-soft: #e2f1ed;
+  --green-ink: #0a4f44;
+  --blue-soft: #e4ecf7;
+  --blue-ink: #1f4c86;
+  --violet-soft: #ece8fb;
+  --violet-ink: #4a3a99;
+  --gray-soft: #ecedea;
+  --gray-ink: #3f444a;
+  --side: #12201d;
+  --side-ink: #e8efec;
+  --side-muted: #a4b8b2;
+  --side-active: #22403a;
+  --side-field: #1c2e2a;
+  --side-line: #2c433e;
+  --side-accent: #2bb39a;
+  --focus: #2b7fd6;
+  color-scheme: light;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --bg: #0f1413;
+    --surface: #171d1c;
+    --ink: #e9eeec;
+    --muted: #a3adaa;
+    --line: #2a3331;
+    --line2: #232b29;
+    --accent: #2bb39a;
+    --accent-hover: #3cc7ad;
+    --on-accent: #06201b;
+    --accent-soft: #163a33;
+    --accent-ink: #8fe0cf;
+    --link: #4cc9b0;
+    --warn: #f2a06c;
+    --warn-soft: #3a2416;
+    --warn-line: #5a3721;
+    --warn-ink: #f7c29e;
+    --green-soft: #163a33;
+    --green-ink: #8fe0cf;
+    --blue-soft: #1a2a40;
+    --blue-ink: #a9c6ee;
+    --violet-soft: #26213f;
+    --violet-ink: #c9bef5;
+    --gray-soft: #262c2b;
+    --gray-ink: #c9cfcd;
+    --side: #0b1110;
+    --side-ink: #e8efec;
+    --side-muted: #94a8a2;
+    --side-active: #1d3631;
+    --side-field: #16211f;
+    --side-line: #24332f;
+    --side-accent: #2bb39a;
+    --focus: #6ab0ff;
+    color-scheme: dark;
   }
 }
 
+:root[data-theme="dark"] {
+  --bg: #0f1413;
+  --surface: #171d1c;
+  --ink: #e9eeec;
+  --muted: #a3adaa;
+  --line: #2a3331;
+  --line2: #232b29;
+  --accent: #2bb39a;
+  --accent-hover: #3cc7ad;
+  --on-accent: #06201b;
+  --accent-soft: #163a33;
+  --accent-ink: #8fe0cf;
+  --link: #4cc9b0;
+  --warn: #f2a06c;
+  --warn-soft: #3a2416;
+  --warn-line: #5a3721;
+  --warn-ink: #f7c29e;
+  --green-soft: #163a33;
+  --green-ink: #8fe0cf;
+  --blue-soft: #1a2a40;
+  --blue-ink: #a9c6ee;
+  --violet-soft: #26213f;
+  --violet-ink: #c9bef5;
+  --gray-soft: #262c2b;
+  --gray-ink: #c9cfcd;
+  --side: #0b1110;
+  --side-ink: #e8efec;
+  --side-muted: #94a8a2;
+  --side-active: #1d3631;
+  --side-field: #16211f;
+  --side-line: #24332f;
+  --side-accent: #2bb39a;
+  --focus: #6ab0ff;
+  color-scheme: dark;
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--line);
+  --color-line2: var(--line2);
+  --color-accent: var(--accent);
+  --color-accent-hover: var(--accent-hover);
+  --color-on-accent: var(--on-accent);
+  --color-accent-soft: var(--accent-soft);
+  --color-accent-ink: var(--accent-ink);
+  --color-link: var(--link);
+  --color-warn: var(--warn);
+  --color-warn-soft: var(--warn-soft);
+  --color-warn-line: var(--warn-line);
+  --color-warn-ink: var(--warn-ink);
+  --color-green-soft: var(--green-soft);
+  --color-green-ink: var(--green-ink);
+  --color-blue-soft: var(--blue-soft);
+  --color-blue-ink: var(--blue-ink);
+  --color-violet-soft: var(--violet-soft);
+  --color-violet-ink: var(--violet-ink);
+  --color-gray-soft: var(--gray-soft);
+  --color-gray-ink: var(--gray-ink);
+  --color-side: var(--side);
+  --color-side-ink: var(--side-ink);
+  --color-side-muted: var(--side-muted);
+  --color-side-active: var(--side-active);
+  --color-side-field: var(--side-field);
+  --color-side-line: var(--side-line);
+  --color-side-accent: var(--side-accent);
+  --color-focus: var(--focus);
+  --font-sans: var(--font-sans);
+  --font-display: var(--font-display);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font-sans), system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display), "Arial Narrow", sans-serif;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
 }
