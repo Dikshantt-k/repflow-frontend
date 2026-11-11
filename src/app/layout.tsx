@@ -17,6 +17,7 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://www.repflow360.in"),
   title: "Repflow",
   description: "Run your gym at full pace.",
 };

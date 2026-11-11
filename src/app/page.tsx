@@ -1,10 +1,34 @@
 import Link from "next/link";
 import type { CSSProperties } from "react";
+import type { Metadata } from "next";
 import { Button, Card } from "@/components/ui";
 import { Logo } from "@/components/Logo";
 import { Reveal } from "@/components/Reveal";
 import { ScrollProgress } from "@/components/ScrollProgress";
 import { ThemeToggle } from "@/components/ThemeToggle";
+
+const TITLE = "Repflow – Gym Management Software for Multi-Branch Gyms";
+const DESCRIPTION =
+  "Members, memberships, payments, GST receipts, attendance and dues — one system for every branch of your gym. Built for Indian gyms and franchises.";
+
+export const metadata: Metadata = {
+  title: TITLE,
+  description: DESCRIPTION,
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: TITLE,
+    description: DESCRIPTION,
+    url: "/",
+    siteName: "Repflow",
+    locale: "en_IN",
+    type: "website",
+  },
+  twitter: {
+    card: "summary",
+    title: TITLE,
+    description: DESCRIPTION,
+  },
+};
 
 const FEATURES = [
   {
