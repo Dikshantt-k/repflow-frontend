@@ -251,6 +251,15 @@ export interface CreateMemberInput {
   amountPaidPaise: number;
   gstInvoice?: boolean;
   sendWelcomeMessage?: boolean;
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
+}
+
+export interface RazorpayProofInput {
+  razorpayOrderId?: string;
+  razorpayPaymentId?: string;
+  razorpaySignature?: string;
 }
 
 export interface ImportMembersResult {
@@ -266,10 +275,10 @@ export const membersApi = {
   get: (id: string) => request<{ member: Member; memberships: Membership[]; payments: Payment[]; notes: Note[] }>(`/members/${id}`),
 
   create: (input: CreateMemberInput) =>
-    request<{ member: Member; membershipId: string; receiptNo: string; balancePaise: number; tempPassword?: string }>("/members", {
-      method: "POST",
-      body: input,
-    }),
+    request<{ member: Member; membershipId: string; receiptNo: string; balancePaise: number; appliedToDuesPaise: number; tempPassword?: string }>(
+      "/members",
+      { method: "POST", body: input }
+    ),
 
   update: (id: string, input: Partial<CreateMemberInput>) => request<{ member: Member }>(`/members/${id}`, { method: "PATCH", body: input }),
 
@@ -280,8 +289,19 @@ export const membersApi = {
 
   renew: (
     id: string,
-    input: { planId: string; startDate?: string; discountPaise?: number; mode: "upi" | "cash" | "card"; amountPaidPaise: number; gstInvoice?: boolean }
-  ) => request<{ membershipId: string; receiptNo: string; balancePaise: number }>(`/members/${id}/renew`, { method: "POST", body: input }),
+    input: {
+      planId: string;
+      startDate?: string;
+      discountPaise?: number;
+      mode: "upi" | "cash" | "card";
+      amountPaidPaise: number;
+      gstInvoice?: boolean;
+    } & RazorpayProofInput
+  ) =>
+    request<{ membershipId: string; receiptNo: string; balancePaise: number; appliedToDuesPaise: number }>(`/members/${id}/renew`, {
+      method: "POST",
+      body: input,
+    }),
 
   import: (input: { branchId: string; rows: Record<string, string>[] }) =>
     request<ImportMembersResult>("/members/import", { method: "POST", body: input }),
@@ -346,12 +366,16 @@ export const paymentsApi = {
   list: (params: { memberId?: string; page?: number; pageSize?: number } = {}) =>
     request<{ payments: Payment[]; pagination: Pagination }>("/payments", { query: params }),
 
-  record: (input: { memberId: string; branchId?: string; description: string; amountPaidPaise: number; mode: "upi" | "cash" | "card"; gstInvoice?: boolean }) =>
-    request<{ payment: Payment }>("/payments", { method: "POST", body: input }),
+  record: (
+    input: { memberId: string; branchId?: string; description: string; amountPaidPaise: number; mode: "upi" | "cash" | "card"; gstInvoice?: boolean } & RazorpayProofInput
+  ) => request<{ payment: Payment }>("/payments", { method: "POST", body: input }),
 
   receipt: (id: string) => request<{ payment: Payment; member: Member; org: { name: string; gstin?: string }; branch: { name: string; address?: string } }>(`/payments/${id}/receipt`),
 
   sendReceipt: (id: string) => request<{ ok: true }>(`/payments/${id}/send-receipt`, { method: "POST" }),
+
+  createRazorpayOrder: (amountPaise: number) =>
+    request<{ orderId: string; amountPaise: number; keyId: string }>("/payments/razorpay/order", { method: "POST", body: { amountPaise } }),
 };
 
 // ---- Dues ----
@@ -359,8 +383,8 @@ export const paymentsApi = {
 export const duesApi = {
   list: () => request<{ dues: Dues[] }>("/dues"),
   remind: (id: string, channel: "whatsapp" | "sms" = "whatsapp") => request<{ dues: Dues }>(`/dues/${id}/remind`, { method: "POST", body: { channel } }),
-  collect: (id: string, input: { amountPaise: number; mode: "upi" | "cash" | "card"; gstInvoice?: boolean }) =>
-    request<{ payment: Payment; dues: Dues }>(`/dues/${id}/collect`, { method: "POST", body: input }),
+  collect: (id: string, input: { amountPaise: number; mode: "upi" | "cash" | "card"; gstInvoice?: boolean } & RazorpayProofInput) =>
+    request<{ payment: Payment; dues: Dues; appliedToOtherDuesPaise: number }>(`/dues/${id}/collect`, { method: "POST", body: input }),
   writeOff: (id: string) => request<{ dues: Dues }>(`/dues/${id}/write-off`, { method: "POST" }),
 };
 

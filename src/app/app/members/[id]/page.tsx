@@ -3,8 +3,9 @@
 import { Suspense, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { useParams, useSearchParams } from "next/navigation";
-import { ApiError, membersApi, plansApi, staffApi } from "@/lib/api";
+import { ApiError, membersApi, paymentsApi, plansApi, staffApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { collectUpiPayment, loadRazorpayScript } from "@/lib/razorpay";
 import { can } from "@/lib/permissions";
 import { hasModule } from "@/lib/modules";
 import { daysLeft, formatDate, formatPaise, initials, rupeesToPaise } from "@/lib/format";
@@ -42,6 +43,14 @@ function emptyWeek(): WorkoutDay[] {
 
 function emptyDietWeek(): DietDay[] {
   return WEEKDAY_ORDER.map((weekday) => ({ weekday, meals: MEAL_TYPES.map((type) => ({ type, items: [] })) }));
+}
+
+/** Keeps a decimal-input field always parseable — strips non-digits and any dot past the first. */
+function sanitizeDecimalInput(v: string): string {
+  const cleaned = v.replace(/[^\d.]/g, "");
+  const firstDot = cleaned.indexOf(".");
+  if (firstDot === -1) return cleaned;
+  return cleaned.slice(0, firstDot + 1) + cleaned.slice(firstDot + 1).replace(/\./g, "");
 }
 
 let tempExerciseId = 0;
@@ -406,6 +415,7 @@ function MemberDetailInner() {
         open={renewOpen}
         onClose={() => setRenewOpen(false)}
         memberId={id}
+        duesPaise={member.duesPaise ?? 0}
         onDone={(msg) => {
           setToast(msg);
           setRenewOpen(false);
@@ -792,7 +802,20 @@ function FreezeModal({ open, onClose, memberId, onDone }: { open: boolean; onClo
   );
 }
 
-function RenewModal({ open, onClose, memberId, onDone }: { open: boolean; onClose: () => void; memberId: string; onDone: (msg: string) => void }) {
+function RenewModal({
+  open,
+  onClose,
+  memberId,
+  duesPaise,
+  onDone,
+}: {
+  open: boolean;
+  onClose: () => void;
+  memberId: string;
+  duesPaise: number;
+  onDone: (msg: string) => void;
+}) {
+  const { context } = useAuth();
   const [plans, setPlans] = useState<Plan[]>([]);
   const [planId, setPlanId] = useState("");
   const [discountRupees, setDiscountRupees] = useState("");
@@ -806,6 +829,12 @@ function RenewModal({ open, onClose, memberId, onDone }: { open: boolean; onClos
     if (!open) return;
     plansApi.list().then((res) => setPlans(res.plans.filter((p) => p.status === "shown")));
   }, [open]);
+
+  useEffect(() => {
+    // Preload so paying via UPI only has to await order creation inside the click handler —
+    // see the matching note in member/renew/page.tsx for why this avoids a new-tab checkout.
+    void loadRazorpayScript();
+  }, []);
 
   const selectedPlan = useMemo(() => plans.find((p) => p._id === planId) ?? null, [plans, planId]);
   const discountPaise = rupeesToPaise(Number(discountRupees) || 0);
@@ -822,14 +851,46 @@ function RenewModal({ open, onClose, memberId, onDone }: { open: boolean; onClos
       setError("Choose a plan.");
       return;
     }
+    const amountPaidPaise = rupeesToPaise(Number(amountPaidRupees) || 0);
+    if (mode === "upi" && amountPaidPaise > 0 && amountPaidPaise < 100) {
+      setError("Enter at least ₹1 to collect via UPI.");
+      return;
+    }
     setError(null);
     setBusy(true);
+    let paid = false;
     try {
-      const amountPaidPaise = rupeesToPaise(Number(amountPaidRupees) || 0);
-      const res = await membersApi.renew(memberId, { planId: selectedPlan._id, discountPaise, mode, amountPaidPaise, gstInvoice });
-      onDone(`Renewed. Receipt ${res.receiptNo}.`);
+      let razorpayProof: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string } | undefined;
+      if (mode === "upi" && amountPaidPaise > 0) {
+        const order = await paymentsApi.createRazorpayOrder(amountPaidPaise);
+        razorpayProof = await collectUpiPayment({
+          order,
+          orgName: context?.org?.name ?? "Repflow",
+          description: `${selectedPlan.name} renewal`,
+        });
+        paid = true;
+      }
+
+      const res = await membersApi.renew(memberId, {
+        planId: selectedPlan._id,
+        discountPaise,
+        mode,
+        amountPaidPaise,
+        gstInvoice,
+        ...razorpayProof,
+      });
+      const extra = res.appliedToDuesPaise > 0 ? ` ${formatPaise(res.appliedToDuesPaise)} was also applied to this member's earlier dues.` : "";
+      onDone(`Renewed. Receipt ${res.receiptNo}.${extra}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't renew this membership.");
+      if (paid) {
+        setError(
+          `${formatPaise(amountPaidPaise)} was collected via UPI, but the renewal couldn't be saved. Don't collect again — contact support to reconcile this payment.`
+        );
+      } else if (err instanceof Error && err.message === "Payment cancelled.") {
+        setError("Payment was cancelled. Try again when ready.");
+      } else {
+        setError(err instanceof ApiError ? err.message : "Couldn't renew this membership.");
+      }
     } finally {
       setBusy(false);
     }
@@ -837,6 +898,11 @@ function RenewModal({ open, onClose, memberId, onDone }: { open: boolean; onClos
 
   return (
     <Modal open={open} onClose={onClose} title="Renew plan">
+      {duesPaise > 0 && (
+        <p className="text-sm font-semibold text-warn bg-warn-soft rounded-lg px-3 py-2">
+          This member also owes {formatPaise(duesPaise)} from before. Collect extra above the plan price to clear it too.
+        </p>
+      )}
       <Field label="Plan">
         <Select value={planId} onChange={(e) => setPlanId(e.target.value)}>
           <option value="">Choose a plan</option>
@@ -876,7 +942,7 @@ function RenewModal({ open, onClose, memberId, onDone }: { open: boolean; onClos
       )}
       {error && <p className="text-sm font-semibold text-warn">{error}</p>}
       <Button variant="primary" disabled={busy || !selectedPlan} onClick={submit}>
-        {busy ? "Saving…" : "Renew and record payment"}
+        {busy ? (mode === "upi" && rupeesToPaise(Number(amountPaidRupees) || 0) > 0 ? "Opening payment…" : "Saving…") : "Renew and record payment"}
       </Button>
     </Modal>
   );
@@ -901,18 +967,23 @@ function PtPanel({
 }) {
   const [createOpen, setCreateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [busyPackageId, setBusyPackageId] = useState<string | null>(null);
 
   function replace(pkg: PTPackage) {
     onChanged(packages.map((p) => (p._id === pkg._id ? pkg : p)));
   }
 
   async function logSession(pkg: PTPackage) {
+    if (busyPackageId) return; // guards a fast double-click/tap from logging two sessions for one
     setError(null);
+    setBusyPackageId(pkg._id);
     try {
       const res = await membersApi.logPtSession(memberId, pkg._id);
       replace(res.package);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't log this session.");
+    } finally {
+      setBusyPackageId(null);
     }
   }
 
@@ -970,7 +1041,11 @@ function PtPanel({
 
             {pkg.status === "active" && (canLog || canSell) && (
               <div className="flex gap-2 mt-2">
-                {canLog && <Button onClick={() => void logSession(pkg)}>Log session</Button>}
+                {canLog && (
+                  <Button disabled={busyPackageId === pkg._id} onClick={() => void logSession(pkg)}>
+                    {busyPackageId === pkg._id ? "Logging…" : "Log session"}
+                  </Button>
+                )}
                 {canSell && <Button onClick={() => void cancelPackage(pkg)}>Cancel package</Button>}
               </div>
             )}
@@ -1228,7 +1303,9 @@ function LogFitnessModal({
   const [busy, setBusy] = useState(false);
 
   function num(v: string): number | undefined {
-    return v.trim() ? Number(v) : undefined;
+    if (!v.trim()) return undefined;
+    const n = Number(v);
+    return Number.isNaN(n) ? undefined : n;
   }
 
   async function submit() {
@@ -1269,31 +1346,31 @@ function LogFitnessModal({
     <Modal open={open} onClose={onClose} title="Log progress">
       <div className="grid grid-cols-2 gap-3">
         <Field label="Weight (kg)">
-          <Input inputMode="decimal" value={weightKg} onChange={(e) => setWeightKg(e.target.value.replace(/[^\d.]/g, ""))} />
+          <Input inputMode="decimal" value={weightKg} onChange={(e) => setWeightKg(sanitizeDecimalInput(e.target.value))} />
         </Field>
         <Field label="Height (cm)">
-          <Input inputMode="decimal" value={heightCm} onChange={(e) => setHeightCm(e.target.value.replace(/[^\d.]/g, ""))} />
+          <Input inputMode="decimal" value={heightCm} onChange={(e) => setHeightCm(sanitizeDecimalInput(e.target.value))} />
         </Field>
         <Field label="Body fat %">
-          <Input inputMode="decimal" value={bodyFatPercent} onChange={(e) => setBodyFatPercent(e.target.value.replace(/[^\d.]/g, ""))} />
+          <Input inputMode="decimal" value={bodyFatPercent} onChange={(e) => setBodyFatPercent(sanitizeDecimalInput(e.target.value))} />
         </Field>
       </div>
       <p className="text-sm font-semibold text-muted mt-1">Measurements (cm, optional)</p>
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <Field label="Chest">
-          <Input inputMode="decimal" value={chestCm} onChange={(e) => setChestCm(e.target.value.replace(/[^\d.]/g, ""))} />
+          <Input inputMode="decimal" value={chestCm} onChange={(e) => setChestCm(sanitizeDecimalInput(e.target.value))} />
         </Field>
         <Field label="Waist">
-          <Input inputMode="decimal" value={waistCm} onChange={(e) => setWaistCm(e.target.value.replace(/[^\d.]/g, ""))} />
+          <Input inputMode="decimal" value={waistCm} onChange={(e) => setWaistCm(sanitizeDecimalInput(e.target.value))} />
         </Field>
         <Field label="Hips">
-          <Input inputMode="decimal" value={hipsCm} onChange={(e) => setHipsCm(e.target.value.replace(/[^\d.]/g, ""))} />
+          <Input inputMode="decimal" value={hipsCm} onChange={(e) => setHipsCm(sanitizeDecimalInput(e.target.value))} />
         </Field>
         <Field label="Arms">
-          <Input inputMode="decimal" value={armsCm} onChange={(e) => setArmsCm(e.target.value.replace(/[^\d.]/g, ""))} />
+          <Input inputMode="decimal" value={armsCm} onChange={(e) => setArmsCm(sanitizeDecimalInput(e.target.value))} />
         </Field>
         <Field label="Thighs">
-          <Input inputMode="decimal" value={thighsCm} onChange={(e) => setThighsCm(e.target.value.replace(/[^\d.]/g, ""))} />
+          <Input inputMode="decimal" value={thighsCm} onChange={(e) => setThighsCm(sanitizeDecimalInput(e.target.value))} />
         </Field>
       </div>
       <Field label="Notes (optional)">

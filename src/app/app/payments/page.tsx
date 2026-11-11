@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { ApiError, attendanceApi, duesApi, paymentsApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { collectUpiPayment, loadRazorpayScript } from "@/lib/razorpay";
 import { can } from "@/lib/permissions";
 import { Button, Card, EmptyState, Field, Input, Kpi, Modal, Pill, Spinner, Toast } from "@/components/ui";
 import { formatDate, formatPaise, rupeesToPaise } from "@/lib/format";
@@ -70,6 +71,9 @@ export default function PaymentsPage() {
   useEffect(() => {
     void loadDues();
     void loadPayments();
+    // Preload so paying via UPI only has to await order creation inside the click handler —
+    // see the matching note in member/renew/page.tsx for why this avoids a new-tab checkout.
+    void loadRazorpayScript();
   }, []);
 
   useEffect(() => {
@@ -77,15 +81,21 @@ export default function PaymentsPage() {
       setSearchResults([]);
       return;
     }
+    let cancelled = false;
     const handle = setTimeout(async () => {
       try {
         const res = await attendanceApi.lookup(searchQuery.trim());
-        setSearchResults(res.members);
+        // A later-typed query can resolve before an earlier, slower one — only the most
+        // recent request for the current text should ever be allowed to set results.
+        if (!cancelled) setSearchResults(res.members);
       } catch {
-        setSearchResults([]);
+        if (!cancelled) setSearchResults([]);
       }
     }, 300);
-    return () => clearTimeout(handle);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
   }, [searchQuery, selectedMember]);
 
   function selectMember(m: Member) {
@@ -111,15 +121,29 @@ export default function PaymentsPage() {
       setRecordError("Enter an amount above ₹0.");
       return;
     }
+    const amountPaidPaise = rupeesToPaise(amount);
+    if (mode === "upi" && amountPaidPaise < 100) {
+      setRecordError("Enter at least ₹1 to collect via UPI.");
+      return;
+    }
 
     setRecordBusy(true);
+    let paid = false;
     try {
+      let razorpayProof: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string } | undefined;
+      if (mode === "upi") {
+        const order = await paymentsApi.createRazorpayOrder(amountPaidPaise);
+        razorpayProof = await collectUpiPayment({ order, orgName: context?.org?.name ?? "Repflow", description: description.trim() });
+        paid = true;
+      }
+
       const res = await paymentsApi.record({
         memberId: selectedMember.id,
         description: description.trim(),
-        amountPaidPaise: rupeesToPaise(amount),
+        amountPaidPaise,
         mode,
         gstInvoice,
+        ...razorpayProof,
       });
       showToast("Payment saved. Receipt ready.");
       setReceiptId(res.payment._id);
@@ -129,7 +153,15 @@ export default function PaymentsPage() {
       setAmountRupees("");
       void loadPayments();
     } catch (err) {
-      setRecordError(err instanceof ApiError ? err.message : "Couldn't save this payment.");
+      if (paid) {
+        setRecordError(
+          `${formatPaise(amountPaidPaise)} was collected via UPI, but this payment couldn't be saved. Don't collect again — contact support to reconcile this payment.`
+        );
+      } else if (err instanceof Error && err.message === "Payment cancelled.") {
+        setRecordError("Payment was cancelled. Try again when ready.");
+      } else {
+        setRecordError(err instanceof ApiError ? err.message : "Couldn't save this payment.");
+      }
     } finally {
       setRecordBusy(false);
     }
@@ -151,21 +183,48 @@ export default function PaymentsPage() {
       setCollectError("Enter an amount above ₹0.");
       return;
     }
+    const amountPaise = rupeesToPaise(amount);
+    if (collectMode === "upi" && amountPaise < 100) {
+      setCollectError("Enter at least ₹1 to collect via UPI.");
+      return;
+    }
 
     setCollectBusy(true);
+    let paid = false;
     try {
+      let razorpayProof: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string } | undefined;
+      if (collectMode === "upi") {
+        const order = await paymentsApi.createRazorpayOrder(amountPaise);
+        razorpayProof = await collectUpiPayment({
+          order,
+          orgName: context?.org?.name ?? "Repflow",
+          description: `Dues collection — ${memberLabel(collectingDue.memberId)}`,
+        });
+        paid = true;
+      }
+
       const res = await duesApi.collect(collectingDue._id, {
-        amountPaise: rupeesToPaise(amount),
+        amountPaise,
         mode: collectMode,
         gstInvoice: collectGstInvoice,
+        ...razorpayProof,
       });
-      showToast("Payment collected.");
+      const extra = res.appliedToOtherDuesPaise > 0 ? ` ${formatPaise(res.appliedToOtherDuesPaise)} also applied to another due.` : "";
+      showToast(`Payment collected.${extra}`);
       setCollectingDue(null);
       setReceiptId(res.payment._id);
       void loadDues();
       void loadPayments();
     } catch (err) {
-      setCollectError(err instanceof ApiError ? err.message : "Couldn't collect this payment.");
+      if (paid) {
+        setCollectError(
+          `${formatPaise(amountPaise)} was collected via UPI, but this couldn't be saved. Don't collect again — contact support to reconcile this payment.`
+        );
+      } else if (err instanceof Error && err.message === "Payment cancelled.") {
+        setCollectError("Payment was cancelled. Try again when ready.");
+      } else {
+        setCollectError(err instanceof ApiError ? err.message : "Couldn't collect this payment.");
+      }
     } finally {
       setCollectBusy(false);
     }
@@ -263,7 +322,7 @@ export default function PaymentsPage() {
           {recordError && <p className="text-sm font-semibold text-warn">{recordError}</p>}
 
           <Button variant="primary" className="w-full" onClick={submitPayment} disabled={recordBusy}>
-            {recordBusy ? "Saving…" : "Save and send receipt"}
+            {recordBusy ? (mode === "upi" ? "Opening payment…" : "Saving…") : "Save and send receipt"}
           </Button>
         </Card>
         )}
@@ -395,7 +454,7 @@ export default function PaymentsPage() {
                 Cancel
               </Button>
               <Button variant="primary" className="flex-1" onClick={submitCollect} disabled={collectBusy}>
-                {collectBusy ? "Saving…" : "Collect payment"}
+                {collectBusy ? (collectMode === "upi" ? "Opening payment…" : "Saving…") : "Collect payment"}
               </Button>
             </div>
           </div>

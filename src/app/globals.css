@@ -12,6 +12,7 @@
   --on-accent: #ffffff;
   --accent-soft: #e2f1ed;
   --accent-ink: #0a4f44;
+  --accent-pop: #f2a33c;
   --link: #0e6b5c;
   --warn: #b4480f;
   --warn-soft: #fcebdd;
@@ -49,6 +50,7 @@
     --on-accent: #06201b;
     --accent-soft: #163a33;
     --accent-ink: #8fe0cf;
+    --accent-pop: #f2b566;
     --link: #4cc9b0;
     --warn: #f2a06c;
     --warn-soft: #3a2416;
@@ -86,6 +88,7 @@
   --on-accent: #06201b;
   --accent-soft: #163a33;
   --accent-ink: #8fe0cf;
+  --accent-pop: #f2b566;
   --link: #4cc9b0;
   --warn: #f2a06c;
   --warn-soft: #3a2416;
@@ -126,6 +129,7 @@
   --color-on-accent: var(--on-accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-ink: var(--accent-ink);
+  --color-accent-pop: var(--accent-pop);
   --color-link: var(--link);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
@@ -166,4 +170,74 @@ h3 {
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+/* ---- scroll-reveal + micro-interactions (landing page) ---- */
+
+.hover-lift {
+  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.25s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(10, 30, 25, 0.1);
+}
+
+.rv {
+  opacity: 0;
+  transform: translateY(18px);
+}
+.rv.in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) var(--d, 0ms), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0ms);
+}
+
+@keyframes hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.hero-in {
+  animation: hero-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--d, 0ms);
+}
+
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  z-index: 40;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.scroll-progress.on {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hover-lift,
+  .hover-lift:hover {
+    transform: none;
+    transition: none;
+  }
+  .rv {
+    opacity: 1;
+    transform: none;
+  }
+  .rv.in {
+    transition: none;
+  }
+  .hero-in {
+    animation: none;
+  }
 }

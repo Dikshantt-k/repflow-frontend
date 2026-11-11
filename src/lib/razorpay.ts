@@ -47,3 +47,39 @@ export async function openRazorpayCheckout(options: Omit<RazorpayCheckoutOptions
   const { keyId, ...rest } = options;
   new window.Razorpay({ key: keyId, ...rest }).open();
 }
+
+export interface RazorpayProofFields {
+  razorpayOrderId: string;
+  razorpayPaymentId: string;
+  razorpaySignature: string;
+}
+
+/**
+ * Shared staff-side "pay via UPI" step: opens checkout for an already-created order and
+ * resolves with the proof fields once Razorpay confirms the payment, or rejects if the
+ * staff member closes the widget before paying.
+ */
+export function collectUpiPayment(opts: {
+  order: { orderId: string; amountPaise: number; keyId: string };
+  orgName: string;
+  description: string;
+}): Promise<RazorpayProofFields> {
+  return new Promise((resolve, reject) => {
+    openRazorpayCheckout({
+      keyId: opts.order.keyId,
+      order_id: opts.order.orderId,
+      amount: opts.order.amountPaise,
+      currency: "INR",
+      name: opts.orgName,
+      description: opts.description,
+      theme: { color: "#0e6b5c" },
+      modal: { ondismiss: () => reject(new Error("Payment cancelled.")) },
+      handler: (response) =>
+        resolve({
+          razorpayOrderId: response.razorpay_order_id,
+          razorpayPaymentId: response.razorpay_payment_id,
+          razorpaySignature: response.razorpay_signature,
+        }),
+    }).catch(reject);
+  });
+}

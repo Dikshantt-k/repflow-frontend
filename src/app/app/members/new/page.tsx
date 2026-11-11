@@ -3,7 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ApiError, branchesApi, membersApi, plansApi, staffApi } from "@/lib/api";
+import { ApiError, branchesApi, membersApi, paymentsApi, plansApi, staffApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { collectUpiPayment, loadRazorpayScript } from "@/lib/razorpay";
 import { formatPaise, rupeesToPaise } from "@/lib/format";
 import { Avatar, Button, Card, Field, Input, Modal, Pill, Select } from "@/components/ui";
 import type { Branch, Plan, StaffRow } from "@/types/api";
@@ -28,6 +30,7 @@ function planLabel(plan: Plan): string {
 
 export default function AddMemberPage() {
   const router = useRouter();
+  const { context } = useAuth();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
@@ -76,6 +79,10 @@ export default function AddMemberPage() {
         if (b.branches.length === 1) setBranchId(b.branches[0]!._id);
       })
       .finally(() => setLoadingOptions(false));
+    // Preload now so paying via UPI only has to await order creation inside the click
+    // handler — awaiting the script load itself there is what can push Razorpay's
+    // checkout into a new tab instead of an in-page modal on some browsers.
+    void loadRazorpayScript();
   }, []);
 
   const eligiblePlans = useMemo(
@@ -125,9 +132,25 @@ export default function AddMemberPage() {
       setFormError("Choose a membership plan.");
       return;
     }
+    if (mode === "upi" && amountPaidPaise > 0 && amountPaidPaise < 100) {
+      setFormError("Enter at least ₹1 to collect via UPI.");
+      return;
+    }
 
     setSubmitting(true);
+    let paid = false;
     try {
+      let razorpayProof: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string } | undefined;
+      if (mode === "upi" && amountPaidPaise > 0) {
+        const order = await paymentsApi.createRazorpayOrder(amountPaidPaise);
+        razorpayProof = await collectUpiPayment({
+          order,
+          orgName: context?.org?.name ?? "Repflow",
+          description: `${selectedPlan.name} membership`,
+        });
+        paid = true;
+      }
+
       const res = await membersApi.create({
         branchId,
         firstName: firstName.trim(),
@@ -147,7 +170,12 @@ export default function AddMemberPage() {
         amountPaidPaise,
         gstInvoice,
         sendWelcomeMessage,
+        ...razorpayProof,
       });
+
+      const toastMsg = `Member added. Receipt ${res.receiptNo}.${
+        res.appliedToDuesPaise > 0 ? ` ${formatPaise(res.appliedToDuesPaise)} applied to earlier dues.` : ""
+      }`;
 
       if (res.tempPassword) {
         setCredentials({
@@ -157,15 +185,23 @@ export default function AddMemberPage() {
           receiptNo: res.receiptNo,
         });
       } else {
-        router.push(`/app/members/${res.member._id}?toast=${encodeURIComponent(`Member added. Receipt ${res.receiptNo}.`)}`);
+        router.push(`/app/members/${res.member._id}?toast=${encodeURIComponent(toastMsg)}`);
       }
     } catch (err) {
-      if (err instanceof ApiError) {
+      if (paid) {
+        setFormError(
+          `${formatPaise(amountPaidPaise)} was collected via UPI, but the member couldn't be saved. Don't collect again — fix the issue below and contact support to reconcile this payment.`
+        );
+      } else if (err instanceof Error && err.message === "Payment cancelled.") {
+        setFormError("Payment was cancelled. Try again when ready.");
+      } else if (err instanceof ApiError) {
         setFormError(err.message);
-        const details = err.details as { existingMemberId?: string } | undefined;
-        if (err.status === 409 && details?.existingMemberId) setDuplicateMemberId(details.existingMemberId);
       } else {
         setFormError("Couldn't save this member. Try again.");
+      }
+      if (err instanceof ApiError) {
+        const details = err.details as { existingMemberId?: string } | undefined;
+        if (err.status === 409 && details?.existingMemberId) setDuplicateMemberId(details.existingMemberId);
       }
     } finally {
       setSubmitting(false);
@@ -375,7 +411,7 @@ export default function AddMemberPage() {
               Cancel
             </Link>
             <Button variant="primary" disabled={submitting} onClick={submit} className="flex-1">
-              {submitting ? "Saving…" : "Save member and show receipt"}
+              {submitting ? (mode === "upi" && amountPaidPaise > 0 ? "Opening payment…" : "Saving…") : "Save member and show receipt"}
             </Button>
           </div>
         </div>
