@@ -16,6 +16,7 @@ export default function TrainerDashboardPage() {
   const [packages, setPackages] = useState<TrainerPtPackageRow[] | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [busyPackageId, setBusyPackageId] = useState<string | null>(null);
 
   function load() {
     membersApi
@@ -38,12 +39,16 @@ export default function TrainerDashboardPage() {
   }
 
   async function logSession(pkg: TrainerPtPackageRow) {
+    if (busyPackageId) return; // guards a fast double-click/tap from logging two sessions for one
+    setBusyPackageId(pkg._id);
     try {
       await membersApi.logPtSession(pkg.memberId, pkg._id);
       showToast(`Session logged for ${pkg.memberName}.`);
       load();
     } catch (err) {
       showToast(err instanceof ApiError ? err.message : "Couldn't log this session.");
+    } finally {
+      setBusyPackageId(null);
     }
   }
 
@@ -87,8 +92,13 @@ export default function TrainerDashboardPage() {
                     <Badge tone="blue">{p.totalSessions - p.sessionsUsed} left</Badge>
                   </td>
                   <td className="p-3 text-right">
-                    <button type="button" className="text-sm font-semibold text-link" onClick={() => void logSession(p)}>
-                      Log session
+                    <button
+                      type="button"
+                      disabled={busyPackageId === p._id}
+                      className="text-sm font-semibold text-link disabled:opacity-50"
+                      onClick={() => void logSession(p)}
+                    >
+                      {busyPackageId === p._id ? "Logging…" : "Log session"}
                     </button>
                   </td>
                 </tr>

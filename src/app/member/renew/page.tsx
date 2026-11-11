@@ -58,9 +58,11 @@ export default function MemberRenewPage() {
               router.push(`/member/home?renewed=${res.receiptNo}`);
             })
             .catch((err) => {
-              setError(
-                err instanceof ApiError ? err.message : "Payment succeeded but we couldn't confirm the renewal. Contact the front desk."
-              );
+              // This callback only ever fires after Razorpay has already confirmed payment,
+              // so any failure here means money moved but the renewal wasn't saved — never
+              // show a bare error message that could read as "nothing happened."
+              const detail = err instanceof ApiError ? ` (${err.message})` : "";
+              setError(`Payment succeeded but we couldn't confirm the renewal${detail}. Don't pay again — contact the front desk.`);
               setBusy(false);
             });
         },

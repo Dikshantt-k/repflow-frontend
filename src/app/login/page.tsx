@@ -6,7 +6,9 @@ import Link from "next/link";
 import { authApi, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { homeFor } from "@/lib/nav";
-import { Button, Field, Input, Pill, Spinner } from "@/components/ui";
+import { Button, Field, Input, Spinner, cx } from "@/components/ui";
+import { Logo } from "@/components/Logo";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import type { ContextOption, LoginIdentifierType, Role } from "@/types/api";
 
 type Step = "credentials" | "choose_context";
@@ -90,27 +92,40 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-8 bg-bg">
-      <div className="w-full max-w-[420px] flex flex-col gap-4">
-        <div className="flex items-center gap-2 font-display italic text-2xl font-extrabold text-accent">Repflow</div>
+    <div className="min-h-screen flex items-center justify-center p-6">
+      <div aria-hidden className="pointer-events-none fixed -z-10 -top-40 -left-32 w-[480px] h-[480px] rounded-full bg-accent/10 blur-3xl" />
+      <div aria-hidden className="pointer-events-none fixed -z-10 -bottom-40 -right-32 w-[480px] h-[480px] rounded-full bg-accent-pop/10 blur-3xl" />
+      <ThemeToggle variant="light" className="fixed top-5 right-5" />
+
+      <div className="hero-in w-full max-w-[440px] bg-surface border border-line rounded-2xl shadow-[0_20px_50px_rgba(10,20,18,0.12)] p-8 sm:p-10 flex flex-col gap-6">
+        <Logo />
 
         {step === "credentials" && (
-          <>
-            <h1 className="text-3xl">Sign in</h1>
-            <div className="flex gap-2">
+          <div className="flex flex-col gap-5">
+            <div>
+              <h1 className="text-3xl">Sign in</h1>
+              <p className="text-sm text-muted mt-1">Choose how you&rsquo;d like to sign in.</p>
+            </div>
+
+            <div className="flex gap-1 p-1 rounded-[14px] bg-line2">
               {IDENTIFIER_TABS.map((tab) => (
-                <Pill
+                <button
                   key={tab.value}
-                  active={identifierType === tab.value}
+                  type="button"
                   onClick={() => {
                     setIdentifierType(tab.value);
                     setIdentifier("");
                   }}
+                  className={cx(
+                    "flex-1 min-h-[38px] rounded-[10px] text-sm font-semibold transition",
+                    identifierType === tab.value ? "bg-surface text-ink shadow-[0_1px_3px_rgba(20,30,25,0.12)]" : "text-muted hover:text-ink",
+                  )}
                 >
                   {tab.label}
-                </Pill>
+                </button>
               ))}
             </div>
+
             {IDENTIFIER_TABS.filter((t) => t.value === identifierType).map((tab) => (
               <Field key={tab.value} label={tab.label}>
                 <Input
@@ -133,16 +148,18 @@ export default function LoginPage() {
               />
             </Field>
             {error && <p className="text-sm font-semibold text-warn">{error}</p>}
-            <Button variant="primary" disabled={!identifier || !password || busy} onClick={login}>
+            <Button variant="primary" className="w-full" disabled={!identifier || !password || busy} onClick={login}>
               {busy ? "Signing in…" : "Sign in"}
             </Button>
-          </>
+          </div>
         )}
 
         {step === "choose_context" && (
-          <>
-            <h1 className="text-3xl">Choose an account</h1>
-            <p className="text-muted">This email is linked to more than one account.</p>
+          <div className="flex flex-col gap-4">
+            <div>
+              <h1 className="text-3xl">Choose an account</h1>
+              <p className="text-sm text-muted mt-1">This login is linked to more than one account.</p>
+            </div>
             <div className="flex flex-col gap-2">
               {contexts.map((ctx, i) => (
                 <button
@@ -150,7 +167,7 @@ export default function LoginPage() {
                   type="button"
                   disabled={busy}
                   onClick={() => pickContext(ctx)}
-                  className="flex flex-col gap-0.5 px-4 py-3 rounded-xl border border-line bg-surface text-left hover:border-accent"
+                  className="flex flex-col gap-0.5 px-4 py-3 rounded-xl border border-line bg-surface text-left transition hover:border-accent hover:bg-accent-soft/40"
                 >
                   <span className="font-semibold">{ctx.orgName ?? "Repflow"}</span>
                   <span className="text-sm text-muted">
@@ -161,10 +178,10 @@ export default function LoginPage() {
               ))}
             </div>
             {error && <p className="text-sm font-semibold text-warn">{error}</p>}
-          </>
+          </div>
         )}
 
-        <p className="text-sm text-muted mt-2">
+        <p className="text-sm text-muted text-center border-t border-line pt-5">
           New gym?{" "}
           <Link href="/register" className="text-link font-semibold">
             Start a free 14-day trial

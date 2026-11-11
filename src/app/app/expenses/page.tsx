@@ -34,19 +34,33 @@ export default function ExpensesPage() {
   const [page, setPage] = useState(1);
   const [createOpen, setCreateOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
 
-  function load() {
+  useEffect(() => {
+    let cancelled = false;
     expensesApi
       .list({ category: category === "all" ? undefined : category, page, pageSize: PAGE_SIZE })
       .then((res) => {
+        if (cancelled) return;
+        // A delete or filter change can shrink the result set out from under the current
+        // page — clamp back instead of showing an empty table above a "page 2 of 1" label.
+        const pages = Math.max(1, Math.ceil(res.pagination.total / PAGE_SIZE));
+        if (page > pages) {
+          setPage(pages);
+          return;
+        }
         setExpenses(res.expenses);
         setTotalPaise(res.totalPaise);
         setTotal(res.pagination.total);
       })
-      .catch((err) => setError(err instanceof ApiError ? err.message : "Couldn't load expenses."));
-  }
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof ApiError ? err.message : "Couldn't load expenses.");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [category, page, reloadKey]);
 
-  useEffect(load, [category, page]);
   useEffect(() => {
     branchesApi.list().then((res) => setBranches(res.branches));
   }, []);
@@ -55,7 +69,7 @@ export default function ExpensesPage() {
     if (!confirm("Delete this expense?")) return;
     try {
       await expensesApi.remove(id);
-      load();
+      setReloadKey((k) => k + 1);
     } catch (err) {
       setError(err instanceof ApiError ? err.message : "Couldn't delete this expense.");
     }
@@ -154,7 +168,7 @@ export default function ExpensesPage() {
         branches={branches}
         onCreated={() => {
           setCreateOpen(false);
-          load();
+          setReloadKey((k) => k + 1);
         }}
       />
     </div>
