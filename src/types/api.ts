@@ -30,9 +30,13 @@ export interface ContextOption {
 export interface AuthUser {
   id: string;
   name?: string;
-  email: string;
+  email?: string;
+  phone?: string;
   themePreference?: "light" | "dark";
+  mustChangePassword?: boolean;
 }
+
+export type LoginIdentifierType = "member_code" | "email" | "phone";
 
 export interface GstBreakdown {
   taxablePaise: number;
@@ -83,7 +87,7 @@ export interface MemberListRow {
   branchName?: string;
   plan: { name: string; endDate: string } | null;
   status: MemberStatus;
-  duesPaise: number;
+  duesPaise?: number; // omitted for trainers — finance-visible-only info
 }
 
 export interface Member {
@@ -103,7 +107,7 @@ export interface Member {
   trainerUserId?: string;
   fingerprintEnrolled: boolean;
   status: MemberStatus;
-  duesPaise: number;
+  duesPaise?: number; // omitted for trainers — finance-visible-only info
   createdAt: string;
 }
 
@@ -308,9 +312,162 @@ export interface WorkoutPlan {
   memberId: string;
   trainerUserId?: string;
   days: WorkoutDay[];
-  dietNotes?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// ---- Diet plans ----
+
+export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
+
+export interface FoodItem {
+  name: string;
+  quantity?: string;
+  calories?: number;
+}
+
+export interface Meal {
+  type: MealType;
+  items: FoodItem[];
+}
+
+export interface DietDay {
+  weekday: Weekday;
+  meals: Meal[];
+}
+
+export interface DietPlan {
+  _id: string;
+  orgId: string;
+  branchId: string;
+  memberId: string;
+  trainerUserId?: string;
+  days: DietDay[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---- Personal training ----
+
+export type PTPackageStatus = "active" | "completed" | "cancelled";
+
+export interface PTSession {
+  _id: string;
+  date: string;
+  trainerUserId: string;
+  notes?: string;
+}
+
+export interface PTPackage {
+  _id: string;
+  orgId: string;
+  branchId: string;
+  memberId: string;
+  trainerUserId?: string;
+  name: string;
+  totalSessions: number;
+  pricePaise?: number;
+  startDate: string;
+  expiresAt?: string;
+  status: PTPackageStatus;
+  sessions: PTSession[];
+  createdAt: string;
+}
+
+// ---- Fitness progress ----
+
+export interface FitnessMeasurements {
+  chestCm?: number;
+  waistCm?: number;
+  hipsCm?: number;
+  armsCm?: number;
+  thighsCm?: number;
+}
+
+export interface FitnessLog {
+  _id: string;
+  orgId: string;
+  branchId: string;
+  memberId: string;
+  recordedByUserId: string;
+  date: string;
+  weightKg?: number;
+  heightCm?: number;
+  bodyFatPercent?: number;
+  measurements?: FitnessMeasurements;
+  photoUrls: string[];
+  notes?: string;
+  createdAt: string;
+}
+
+// ---- Expenses ----
+
+export type ExpenseCategory =
+  | "rent"
+  | "electricity"
+  | "maintenance"
+  | "staff_salary"
+  | "equipment"
+  | "marketing"
+  | "vendor"
+  | "other";
+
+export interface Expense {
+  _id: string;
+  orgId: string;
+  branchId: string;
+  category: ExpenseCategory;
+  description: string;
+  vendor?: string;
+  amountPaise: number;
+  date: string;
+  createdByUserId: string;
+  createdAt: string;
+}
+
+// ---- Leads & enquiries ----
+
+export type LeadSource = "walk_in" | "referral" | "website" | "social_media" | "phone" | "other";
+export type LeadStatus = "new" | "contacted" | "trial_scheduled" | "trial_completed" | "converted" | "lost";
+
+export interface Lead {
+  _id: string;
+  orgId: string;
+  branchId: string;
+  name: string;
+  phone: string;
+  email?: string;
+  source: LeadSource;
+  status: LeadStatus;
+  assignedToUserId?: string | { _id: string; name?: string; email: string };
+  followUpDate?: string;
+  notes?: string;
+  lostReason?: string;
+  createdAt: string;
+}
+
+// ---- Trainer dashboard ----
+
+export interface TrainerPtPackageRow {
+  _id: string;
+  memberId: string;
+  memberName: string;
+  name: string;
+  totalSessions: number;
+  sessionsUsed: number;
+}
+
+// ---- Audit logs ----
+
+export interface AuditLogRow {
+  _id: string;
+  orgId?: string | { _id: string; name: string };
+  actorUserId: string | { _id: string; name?: string; email: string };
+  action: string;
+  targetType?: string;
+  targetId?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface PlatformInvoice {
@@ -384,6 +541,7 @@ export interface StaffRow {
   role: InvitableRole;
   branchId: string;
   accepted: boolean;
+  ptRatePerSessionPaise?: number;
 }
 
 // ---- Franchisees ----

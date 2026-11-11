@@ -2,13 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { useAuth } from "@/lib/auth-context";
 import { meApi, ApiError } from "@/lib/api";
+import { loadRazorpayScript, openRazorpayCheckout } from "@/lib/razorpay";
 import { formatPaise } from "@/lib/format";
 import { Button, Card, Spinner } from "@/components/ui";
 import type { Plan } from "@/types/api";
 
 export default function MemberRenewPage() {
   const router = useRouter();
+  const { context } = useAuth();
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -19,18 +22,51 @@ export default function MemberRenewPage() {
       setPlans(res.plans);
       setSelected(res.plans[0]?._id ?? null);
     });
+    // Preload now so the only await left in the click handler is creating the order —
+    // waiting on the script load itself, inside the click handler, is what pushes
+    // Razorpay's checkout into a new tab instead of an in-page modal on some browsers.
+    void loadRazorpayScript();
   }, []);
 
   async function pay() {
     if (!selected) return;
+    const plan = plans?.find((p) => p._id === selected);
+    if (!plan) return;
+
     setError(null);
     setBusy(true);
     try {
-      const res = await meApi.renew(selected);
-      router.push(`/member/home?renewed=${res.receiptNo}`);
+      const order = await meApi.createRenewOrder(selected);
+      await openRazorpayCheckout({
+        keyId: order.keyId,
+        order_id: order.orderId,
+        amount: order.amountPaise,
+        currency: "INR",
+        name: context?.org?.name ?? "Repflow",
+        description: `${plan.name} renewal`,
+        theme: { color: "#16a34a" },
+        modal: { ondismiss: () => setBusy(false) },
+        handler: (response) => {
+          meApi
+            .renew({
+              planId: selected,
+              razorpayOrderId: response.razorpay_order_id,
+              razorpayPaymentId: response.razorpay_payment_id,
+              razorpaySignature: response.razorpay_signature,
+            })
+            .then((res) => {
+              router.push(`/member/home?renewed=${res.receiptNo}`);
+            })
+            .catch((err) => {
+              setError(
+                err instanceof ApiError ? err.message : "Payment succeeded but we couldn't confirm the renewal. Contact the front desk."
+              );
+              setBusy(false);
+            });
+        },
+      });
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : "Couldn't complete the renewal.");
-    } finally {
+      setError(err instanceof ApiError ? err.message : "Couldn't start the payment. Try again.");
       setBusy(false);
     }
   }
@@ -88,9 +124,8 @@ export default function MemberRenewPage() {
           {error && <p className="text-sm font-semibold text-warn">{error}</p>}
 
           <Button variant="primary" disabled={!selected || busy} onClick={pay}>
-            {busy ? "Processing…" : "Pay with UPI"}
+            {busy ? "Opening payment…" : "Pay now"}
           </Button>
-          <p className="text-xs text-muted text-center">Dev mode: payment is recorded immediately — no real payment gateway is wired up yet.</p>
         </>
       )}
     </div>

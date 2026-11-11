@@ -4,22 +4,8 @@ import { useState } from "react";
 import { adminApi, ApiError, type PackageInput } from "@/lib/api";
 import { rupeesToPaise } from "@/lib/format";
 import { Button, Field, Input, Select } from "@/components/ui";
+import { MODULE_KEYS, MODULE_LABELS } from "@/lib/modules";
 import type { ChargeUnit, Package } from "@/types/api";
-
-const MODULES = [
-  "members",
-  "payments",
-  "gst_receipts",
-  "manual_attendance",
-  "biometric_attendance",
-  "auto_reminders",
-  "multi_branch_dashboard",
-  "staff_roles",
-  "franchise_network",
-  "leads",
-  "personal_training",
-  "advanced_reports",
-];
 
 export function PackageDialog({ initial, onClose, onSaved }: { initial?: Package; onClose: () => void; onSaved: () => void }) {
   const [name, setName] = useState(initial?.name ?? "");
@@ -136,12 +122,14 @@ export function PackageDialog({ initial, onClose, onSaved }: { initial?: Package
           </Field>
         </div>
 
-        <p className="text-sm font-semibold text-muted">Modules included</p>
+        <p className="text-sm font-semibold text-muted">
+          Modules included <span className="font-normal text-xs">— takes effect immediately for every gym on this package</span>
+        </p>
         <div className="grid grid-cols-2 gap-1.5">
-          {MODULES.map((m) => (
+          {MODULE_KEYS.map((m) => (
             <label key={m} className="flex items-center gap-2 text-sm">
               <input type="checkbox" checked={modules.includes(m)} onChange={() => toggleModule(m)} />
-              {m.replace(/_/g, " ")}
+              {MODULE_LABELS[m]}
             </label>
           ))}
         </div>

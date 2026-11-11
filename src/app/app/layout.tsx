@@ -4,7 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { navFor } from "@/lib/nav";
+import { visibleNavFor } from "@/lib/nav";
+import { hasModule } from "@/lib/modules";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { initials } from "@/lib/format";
 import { Spinner } from "@/components/ui";
@@ -16,10 +17,12 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
-    if (!loading && !user) router.replace("/login");
+    if (loading) return;
+    if (!user) router.replace("/login");
+    else if (user.mustChangePassword) router.replace("/set-password");
   }, [loading, user, router]);
 
-  if (loading || !user || !context) {
+  if (loading || !user || !context || user.mustChangePassword) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <Spinner />
@@ -27,12 +30,15 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
     );
   }
 
-  const nav = [...navFor(context.role)];
+  const nav = [...visibleNavFor(context.role, context.org?.modules)];
   if (context.role === "org_owner" || context.role === "franchise_owner") {
     nav.splice(1, 0, { href: "/app/branches", label: "Branches" });
   }
-  if (context.role === "org_owner" && context.org?.businessType === "franchise") {
+  if (context.role === "org_owner" && context.org?.businessType === "franchise" && hasModule(context.org?.modules, "franchise_network")) {
     nav.splice(2, 0, { href: "/app/franchisees", label: "Franchisees" });
+  }
+  if (context.role === "org_owner" && hasModule(context.org?.modules, "audit_log")) {
+    nav.push({ href: "/app/audit", label: "Activity log" });
   }
   const isPlatformRole = context.role === "super_admin" || context.role === "support";
   const brandName = isPlatformRole ? "Repflow" : (context.org?.name ?? "Repflow");

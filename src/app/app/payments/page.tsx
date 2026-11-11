@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, attendanceApi, duesApi, paymentsApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { can } from "@/lib/permissions";
 import { Button, Card, EmptyState, Field, Input, Kpi, Modal, Pill, Spinner, Toast } from "@/components/ui";
 import { formatDate, formatPaise, rupeesToPaise } from "@/lib/format";
 import { ReceiptModal } from "@/components/ReceiptModal";
@@ -17,6 +19,8 @@ function memberPhone(memberId: string | { phone?: string }): string | undefined 
 }
 
 export default function PaymentsPage() {
+  const { context } = useAuth();
+  const canRecord = can.recordPayment(context?.role);
   const [dues, setDues] = useState<Dues[]>([]);
   const [duesLoading, setDuesLoading] = useState(true);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -195,6 +199,7 @@ export default function PaymentsPage() {
       </div>
 
       <div className="flex flex-wrap gap-3.5 items-start">
+        {canRecord && (
         <Card className="flex-1 basis-[380px]">
           <h2>Record a payment</h2>
 
@@ -261,6 +266,7 @@ export default function PaymentsPage() {
             {recordBusy ? "Saving…" : "Save and send receipt"}
           </Button>
         </Card>
+        )}
 
         <Card className="flex-1 basis-[380px] p-0 overflow-x-auto">
           <div className="p-5 pb-0">
@@ -298,9 +304,11 @@ export default function PaymentsPage() {
                     <td className="p-3">
                       <div className="flex gap-2 justify-end">
                         <Button onClick={() => remind(due)}>Remind</Button>
-                        <Button variant="primary" onClick={() => openCollect(due)}>
-                          Collect
-                        </Button>
+                        {canRecord && (
+                          <Button variant="primary" onClick={() => openCollect(due)}>
+                            Collect
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>

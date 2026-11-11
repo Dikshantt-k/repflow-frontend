@@ -3,10 +3,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ApiError, branchesApi, membersApi, plansApi } from "@/lib/api";
+import { ApiError, branchesApi, membersApi, plansApi, staffApi } from "@/lib/api";
 import { formatPaise, rupeesToPaise } from "@/lib/format";
-import { Avatar, Button, Card, Field, Input, Pill, Select } from "@/components/ui";
-import type { Branch, Plan } from "@/types/api";
+import { Avatar, Button, Card, Field, Input, Modal, Pill, Select } from "@/components/ui";
+import type { Branch, Plan, StaffRow } from "@/types/api";
 
 const GENDERS: Array<{ value: string; label: string }> = [
   { value: "prefer_not_to_say", label: "Prefer not to say" },
@@ -31,6 +31,7 @@ export default function AddMemberPage() {
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [staff, setStaff] = useState<StaffRow[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
 
   // Personal details
@@ -47,6 +48,7 @@ export default function AddMemberPage() {
   // Membership
   const [branchId, setBranchId] = useState("");
   const [planId, setPlanId] = useState("");
+  const [trainerUserId, setTrainerUserId] = useState("");
   const [startDate, setStartDate] = useState(todayIso());
 
   // Payment
@@ -61,12 +63,16 @@ export default function AddMemberPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [duplicateMemberId, setDuplicateMemberId] = useState<string | null>(null);
+  const [credentials, setCredentials] = useState<{ memberId: string; memberCode: string; tempPassword: string; receiptNo: string } | null>(
+    null
+  );
 
   useEffect(() => {
-    Promise.all([branchesApi.list(), plansApi.list()])
-      .then(([b, p]) => {
+    Promise.all([branchesApi.list(), plansApi.list(), staffApi.list()])
+      .then(([b, p, s]) => {
         setBranches(b.branches);
         setPlans(p.plans);
+        setStaff(s.staff);
         if (b.branches.length === 1) setBranchId(b.branches[0]!._id);
       })
       .finally(() => setLoadingOptions(false));
@@ -75,6 +81,11 @@ export default function AddMemberPage() {
   const eligiblePlans = useMemo(
     () => plans.filter((p) => p.status === "shown" && (p.allBranches || p.branchIds.includes(branchId))),
     [plans, branchId]
+  );
+
+  const branchTrainers = useMemo(
+    () => staff.filter((s) => s.role === "trainer" && s.branchId === branchId),
+    [staff, branchId]
   );
 
   const selectedPlan = eligiblePlans.find((p) => p._id === planId) ?? null;
@@ -127,6 +138,7 @@ export default function AddMemberPage() {
         emergencyContact: emergencyName || emergencyPhone ? { name: emergencyName || undefined, phone: emergencyPhone || undefined } : undefined,
         healthNotes: healthNotes.trim() || undefined,
         email: email.trim() || undefined,
+        trainerUserId: trainerUserId || undefined,
         planId: selectedPlan._id,
         startDate,
         joiningFeeWaived,
@@ -137,7 +149,16 @@ export default function AddMemberPage() {
         sendWelcomeMessage,
       });
 
-      router.push(`/app/members/${res.member._id}?toast=${encodeURIComponent(`Member added. Receipt ${res.receiptNo}.`)}`);
+      if (res.tempPassword) {
+        setCredentials({
+          memberId: res.member._id,
+          memberCode: res.member.memberCode,
+          tempPassword: res.tempPassword,
+          receiptNo: res.receiptNo,
+        });
+      } else {
+        router.push(`/app/members/${res.member._id}?toast=${encodeURIComponent(`Member added. Receipt ${res.receiptNo}.`)}`);
+      }
     } catch (err) {
       if (err instanceof ApiError) {
         setFormError(err.message);
@@ -225,6 +246,7 @@ export default function AddMemberPage() {
                 onChange={(e) => {
                   setBranchId(e.target.value);
                   setPlanId("");
+                  setTrainerUserId("");
                 }}
                 disabled={loadingOptions}
               >
@@ -242,6 +264,16 @@ export default function AddMemberPage() {
                 {eligiblePlans.map((p) => (
                   <option key={p._id} value={p._id}>
                     {planLabel(p)}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+            <Field label="Trainer (optional)" hint="Their workout, diet and PT packages will be managed by this trainer only">
+              <Select value={trainerUserId} onChange={(e) => setTrainerUserId(e.target.value)} disabled={!branchId}>
+                <option value="">No trainer assigned</option>
+                {branchTrainers.map((t) => (
+                  <option key={t.userId} value={t.userId}>
+                    {t.name ?? t.email}
                   </option>
                 ))}
               </Select>
@@ -348,6 +380,30 @@ export default function AddMemberPage() {
           </div>
         </div>
       </div>
+
+      <Modal open={!!credentials} onClose={() => {}} title="Member login details">
+        {credentials && (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted">
+              Share these with the member so they can sign in to the member app. This password is only shown once.
+            </p>
+            <div className="flex flex-col gap-2 bg-line2 rounded-lg p-3.5">
+              <Row label="Member code" value={credentials.memberCode} />
+              <Row label="Temporary password" value={credentials.tempPassword} />
+            </div>
+            <Button
+              variant="primary"
+              onClick={() =>
+                router.push(
+                  `/app/members/${credentials.memberId}?toast=${encodeURIComponent(`Member added. Receipt ${credentials.receiptNo}.`)}`
+                )
+              }
+            >
+              Done
+            </Button>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

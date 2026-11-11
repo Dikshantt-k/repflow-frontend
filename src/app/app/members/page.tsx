@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { membersApi, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { can } from "@/lib/permissions";
 import { formatDate, formatPaise, initials } from "@/lib/format";
 import { Avatar, Button, EmptyState, Input, Pill, Spinner, statusBadge } from "@/components/ui";
 import { ImportMembersDialog } from "@/components/ImportMembersDialog";
@@ -22,6 +24,9 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
 const PAGE_SIZE = 25;
 
 export default function MembersListPage() {
+  const { context } = useAuth();
+  const canManage = can.createMember(context?.role);
+  const showFinancials = context?.role !== "trainer";
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<StatusFilter>("all");
@@ -79,15 +84,17 @@ export default function MembersListPage() {
         <div>
           <h1 className="text-3xl">{pagination ? pagination.total : "…"} members in your branches</h1>
         </div>
-        <div className="flex gap-2.5">
-          <Button onClick={() => setImportOpen(true)}>Import CSV</Button>
-          <Link
-            href="/app/members/new"
-            className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-[10px] font-semibold text-sm bg-accent border border-accent text-on-accent hover:bg-accent-hover"
-          >
-            + Add member
-          </Link>
-        </div>
+        {canManage && (
+          <div className="flex gap-2.5">
+            <Button onClick={() => setImportOpen(true)}>Import CSV</Button>
+            <Link
+              href="/app/members/new"
+              className="inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-[10px] font-semibold text-sm bg-accent border border-accent text-on-accent hover:bg-accent-hover"
+            >
+              + Add member
+            </Link>
+          </div>
+        )}
       </div>
 
       <ImportMembersDialog open={importOpen} onClose={() => setImportOpen(false)} onImported={() => setReloadKey((k) => k + 1)} />
@@ -116,7 +123,7 @@ export default function MembersListPage() {
                 <th className="text-left text-[13px] font-semibold text-muted p-3 bg-line2">Plan</th>
                 <th className="text-left text-[13px] font-semibold text-muted p-3 bg-line2">Branch</th>
                 <th className="text-left text-[13px] font-semibold text-muted p-3 bg-line2">Status</th>
-                <th className="text-left text-[13px] font-semibold text-muted p-3 bg-line2">Dues</th>
+                {showFinancials && <th className="text-left text-[13px] font-semibold text-muted p-3 bg-line2">Dues</th>}
               </tr>
             </thead>
             <tbody>
@@ -158,9 +165,11 @@ export default function MembersListPage() {
                     </td>
                     <td className="p-3">{m.branchName ?? "—"}</td>
                     <td className="p-3">{statusBadge(m.status)}</td>
-                    <td className="p-3">
-                      {m.duesPaise > 0 ? <span className="font-semibold text-warn">{formatPaise(m.duesPaise)}</span> : <span className="text-muted">—</span>}
-                    </td>
+                    {showFinancials && (
+                      <td className="p-3">
+                        {m.duesPaise ? <span className="font-semibold text-warn">{formatPaise(m.duesPaise)}</span> : <span className="text-muted">—</span>}
+                      </td>
+                    )}
                   </tr>
                 ))
               )}

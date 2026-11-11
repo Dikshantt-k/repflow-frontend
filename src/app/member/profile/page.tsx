@@ -2,9 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { meApi, ApiError } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { hasModule } from "@/lib/modules";
 import { formatDate, formatPaise, initials } from "@/lib/format";
-import { Avatar, Button, Card, Field, Modal, Select, Spinner } from "@/components/ui";
-import type { MeMemberSummary, Payment } from "@/types/api";
+import { Avatar, Badge, Button, Card, Field, Modal, Select, Spinner } from "@/components/ui";
+import type { MeMemberSummary, Payment, PTPackage } from "@/types/api";
 
 const FREEZE_REASONS = [
   { value: "travel", label: "Travel" },
@@ -14,8 +16,11 @@ const FREEZE_REASONS = [
 ] as const;
 
 export default function MemberProfilePage() {
+  const { context } = useAuth();
+  const ptEnabled = hasModule(context?.org?.modules, "personal_training");
   const [data, setData] = useState<MeMemberSummary | null>(null);
   const [payments, setPayments] = useState<Payment[] | null>(null);
+  const [ptPackages, setPtPackages] = useState<PTPackage[] | null>(null);
   const [freezeOpen, setFreezeOpen] = useState(false);
   const [days, setDays] = useState("7");
   const [reason, setReason] = useState<(typeof FREEZE_REASONS)[number]["value"]>("travel");
@@ -26,8 +31,10 @@ export default function MemberProfilePage() {
   function load() {
     meApi.summary().then(setData);
     meApi.payments().then((res) => setPayments(res.payments));
+    if (ptEnabled) meApi.pt().then((res) => setPtPackages(res.packages));
   }
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount; ptEnabled doesn't change mid-session
   useEffect(load, []);
 
   async function submitFreeze() {
@@ -79,6 +86,22 @@ export default function MemberProfilePage() {
         </dl>
         <Button onClick={() => setFreezeOpen(true)}>Request a freeze</Button>
       </Card>
+
+      {ptPackages && ptPackages.some((p) => p.status === "active") && (
+        <Card>
+          <h2 className="text-lg">Personal training</h2>
+          <ul className="flex flex-col">
+            {ptPackages
+              .filter((p) => p.status === "active")
+              .map((p) => (
+                <li key={p._id} className="flex justify-between items-center py-2 border-t border-line2 first:border-0 text-sm">
+                  <span>{p.name}</span>
+                  <Badge tone="blue">{p.totalSessions - p.sessions.length} sessions left</Badge>
+                </li>
+              ))}
+          </ul>
+        </Card>
+      )}
 
       <Card>
         <h2 className="text-lg">Receipts</h2>

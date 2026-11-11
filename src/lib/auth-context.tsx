@@ -11,7 +11,7 @@ export interface MeContext {
   role: Role;
   orgId?: string;
   branchId?: string;
-  org?: { name: string; city?: string; businessType: string; status: string; logoUrl?: string } | null;
+  org?: { name: string; city?: string; businessType: string; status: string; logoUrl?: string; modules: string[] } | null;
   branch?: { name: string; code: string } | null;
 }
 

@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { branchesApi, plansApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { can } from "@/lib/permissions";
 import { Badge, Button, Card, EmptyState, Field, Input, Pill, Spinner } from "@/components/ui";
 import { formatPaise } from "@/lib/format";
 import { PlanDialog } from "@/components/PlanDialog";
@@ -16,6 +18,8 @@ function lengthLabel(plan: Plan): string {
 }
 
 export default function PlansPage() {
+  const { context } = useAuth();
+  const canManage = can.managePlans(context?.role);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -61,9 +65,11 @@ export default function PlansPage() {
           <h1>Membership plans</h1>
           <p className="text-muted mt-1">Prices include 18% GST.</p>
         </div>
-        <Button variant="primary" onClick={openCreate}>
-          + New plan
-        </Button>
+        {canManage && (
+          <Button variant="primary" onClick={openCreate}>
+            + New plan
+          </Button>
+        )}
       </div>
 
       <div className="flex flex-wrap gap-3 items-end">
@@ -100,7 +106,7 @@ export default function PlansPage() {
                 <th className="text-left text-[13px] font-semibold text-muted p-3 bg-line2">Joining fee</th>
                 <th className="text-left text-[13px] font-semibold text-muted p-3 bg-line2">Branches</th>
                 <th className="text-left text-[13px] font-semibold text-muted p-3 bg-line2">Status</th>
-                <th className="text-left text-[13px] font-semibold text-muted p-3 bg-line2 rounded-r-lg" />
+                {canManage && <th className="text-left text-[13px] font-semibold text-muted p-3 bg-line2 rounded-r-lg" />}
               </tr>
             </thead>
             <tbody>
@@ -116,9 +122,11 @@ export default function PlansPage() {
                   <td className="p-3">
                     <Badge tone={plan.status === "shown" ? "green" : "gray"}>{plan.status === "shown" ? "Shown" : "Hidden"}</Badge>
                   </td>
-                  <td className="p-3 text-right">
-                    <Button onClick={() => openEdit(plan)}>Edit</Button>
-                  </td>
+                  {canManage && (
+                    <td className="p-3 text-right">
+                      <Button onClick={() => openEdit(plan)}>Edit</Button>
+                    </td>
+                  )}
                 </tr>
               ))}
             </tbody>

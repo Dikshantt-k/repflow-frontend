@@ -4,6 +4,7 @@ import type {
   AuthUser,
   Branch,
   ContextOption,
+  LoginIdentifierType,
   Dues,
   Member,
   MemberListRow,
@@ -29,6 +30,18 @@ import type {
   Network,
   WorkoutPlan,
   Weekday,
+  PTPackage,
+  FitnessLog,
+  FitnessMeasurements,
+  AuditLogRow,
+  DietPlan,
+  DietDay,
+  Expense,
+  ExpenseCategory,
+  Lead,
+  LeadSource,
+  LeadStatus,
+  TrainerPtPackageRow,
 } from "@/types/api";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
@@ -123,12 +136,12 @@ export const authApi = {
   register: (name: string, email: string, password: string) =>
     request<{ sessionToken: string }>("/auth/register", { method: "POST", body: { name, email, password }, auth: false }),
 
-  login: (email: string, password: string) =>
+  login: (identifierType: LoginIdentifierType, identifier: string, password: string) =>
     request<
       | { status: "no_account"; sessionToken: string }
       | { status: "choose_context"; sessionToken: string; contexts: ContextOption[] }
       | { status: "ok"; user: AuthUser; accessToken: string; refreshToken: string }
-    >("/auth/login", { method: "POST", body: { email, password }, auth: false }),
+    >("/auth/login", { method: "POST", body: { identifierType, identifier, password }, auth: false }),
 
   selectContext: (sessionToken: string, ctx: ContextOption) =>
     request<{ status: "ok"; user: AuthUser; accessToken: string; refreshToken: string }>("/auth/context", {
@@ -137,13 +150,26 @@ export const authApi = {
       auth: false,
     }),
 
-  me: () => request<{ user: AuthUser; context: { userId: string; role: Role; orgId?: string; branchId?: string; org?: { name: string; city?: string; businessType: string; status: string; logoUrl?: string } | null; branch?: { name: string; code: string } | null } }>("/auth/me"),
+  me: () =>
+    request<{
+      user: AuthUser;
+      context: {
+        userId: string;
+        role: Role;
+        orgId?: string;
+        branchId?: string;
+        org?: { name: string; city?: string; businessType: string; status: string; logoUrl?: string; modules: string[] } | null;
+        branch?: { name: string; code: string } | null;
+      };
+    }>("/auth/me"),
 
   acceptInvite: (email: string, password: string) =>
     request<
       | { status: "choose_context"; sessionToken: string; contexts: ContextOption[] }
       | { status: "ok"; user: AuthUser; accessToken: string; refreshToken: string }
     >("/auth/accept-invite", { method: "POST", body: { email, password }, auth: false }),
+
+  setPassword: (newPassword: string) => request<{ ok: true }>("/auth/set-password", { method: "POST", body: { newPassword } }),
 };
 
 // ---- Signup ----
@@ -201,6 +227,7 @@ export interface ListMembersParams {
   search?: string;
   status?: "all" | "active" | "expiring" | "expired" | "frozen";
   branchId?: string;
+  mine?: boolean;
   page?: number;
   pageSize?: number;
 }
@@ -239,7 +266,10 @@ export const membersApi = {
   get: (id: string) => request<{ member: Member; memberships: Membership[]; payments: Payment[]; notes: Note[] }>(`/members/${id}`),
 
   create: (input: CreateMemberInput) =>
-    request<{ member: Member; membershipId: string; receiptNo: string; balancePaise: number }>("/members", { method: "POST", body: input }),
+    request<{ member: Member; membershipId: string; receiptNo: string; balancePaise: number; tempPassword?: string }>("/members", {
+      method: "POST",
+      body: input,
+    }),
 
   update: (id: string, input: Partial<CreateMemberInput>) => request<{ member: Member }>(`/members/${id}`, { method: "PATCH", body: input }),
 
@@ -262,6 +292,35 @@ export const membersApi = {
     memberId: string,
     input: { days: Array<{ weekday: Weekday; label?: string; exercises: Array<{ name: string; sets?: number; reps?: string; notes?: string }> }>; dietNotes?: string }
   ) => request<{ plan: WorkoutPlan }>(`/members/${memberId}/workout`, { method: "PUT", body: input }),
+
+  listPt: (memberId: string) => request<{ packages: PTPackage[] }>(`/members/${memberId}/pt-packages`),
+
+  createPt: (memberId: string, input: { name: string; totalSessions: number; pricePaise?: number; expiresAt?: string }) =>
+    request<{ package: PTPackage }>(`/members/${memberId}/pt-packages`, { method: "POST", body: input }),
+
+  logPtSession: (memberId: string, packageId: string, notes?: string) =>
+    request<{ package: PTPackage }>(`/members/${memberId}/pt-packages/${packageId}/sessions`, { method: "POST", body: { notes } }),
+
+  deletePtSession: (memberId: string, packageId: string, sessionId: string) =>
+    request<{ package: PTPackage }>(`/members/${memberId}/pt-packages/${packageId}/sessions/${sessionId}`, { method: "DELETE" }),
+
+  cancelPt: (memberId: string, packageId: string) =>
+    request<{ package: PTPackage }>(`/members/${memberId}/pt-packages/${packageId}`, { method: "PATCH", body: { status: "cancelled" } }),
+
+  listFitness: (memberId: string) => request<{ logs: FitnessLog[] }>(`/members/${memberId}/fitness`),
+
+  addFitness: (
+    memberId: string,
+    input: { weightKg?: number; heightCm?: number; bodyFatPercent?: number; measurements?: FitnessMeasurements; notes?: string }
+  ) => request<{ log: FitnessLog }>(`/members/${memberId}/fitness`, { method: "POST", body: input }),
+
+  deleteFitness: (memberId: string, logId: string) =>
+    request<{ ok: true }>(`/members/${memberId}/fitness/${logId}`, { method: "DELETE" }),
+
+  getDiet: (memberId: string) => request<{ plan: DietPlan | null }>(`/members/${memberId}/diet`),
+
+  saveDiet: (memberId: string, input: { days: DietDay[] }) =>
+    request<{ plan: DietPlan }>(`/members/${memberId}/diet`, { method: "PUT", body: input }),
 };
 
 // ---- Attendance ----
@@ -354,6 +413,16 @@ export const adminApi = {
   listInvoices: (gymId: string) => request<{ invoices: PlatformInvoice[] }>(`/admin/gyms/${gymId}/invoices`),
 
   markInvoicePaid: (invoiceId: string) => request<{ invoice: PlatformInvoice }>(`/admin/invoices/${invoiceId}/mark-paid`, { method: "POST" }),
+
+  auditLogs: (params: { page?: number; pageSize?: number; action?: string; orgId?: string } = {}) =>
+    request<{ logs: AuditLogRow[]; pagination: Pagination }>("/admin/audit-logs", { query: params }),
+};
+
+// ---- Audit logs (org-scoped) ----
+
+export const auditLogsApi = {
+  list: (params: { page?: number; pageSize?: number; action?: string } = {}) =>
+    request<{ logs: AuditLogRow[]; pagination: Pagination }>("/audit-logs", { query: params }),
 };
 
 // ---- Member self-service (member mobile app) ----
@@ -372,11 +441,17 @@ export const meApi = {
   attendance: (month?: string) => request<{ attendance: Attendance[]; count: number }>("/member/attendance", { query: { month } }),
   payments: () => request<{ payments: Payment[] }>("/member/payments"),
   plans: () => request<{ plans: Plan[] }>("/member/plans"),
-  renew: (planId: string) => request<{ membershipId: string; receiptNo: string; balancePaise: number }>("/member/renew", { method: "POST", body: { planId } }),
+  createRenewOrder: (planId: string) =>
+    request<{ orderId: string; amountPaise: number; keyId: string }>("/member/renew/order", { method: "POST", body: { planId } }),
+  renew: (input: { planId: string; razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string }) =>
+    request<{ membershipId: string; receiptNo: string; balancePaise: number }>("/member/renew", { method: "POST", body: input }),
   freezeRequest: (input: { fromDate: string; days: number; reason: "travel" | "medical" | "exams" | "other" }) =>
     request<{ membership: Membership }>("/member/freeze-request", { method: "POST", body: input }),
   workout: () => request<{ plan: WorkoutPlan | null; completedExerciseIds: string[] }>("/member/workout"),
   toggleExercise: (exerciseId: string) => request<{ completed: boolean }>("/member/workout/toggle", { method: "POST", body: { exerciseId } }),
+  pt: () => request<{ packages: PTPackage[] }>("/member/pt-packages"),
+  fitness: () => request<{ logs: FitnessLog[] }>("/member/fitness"),
+  diet: () => request<{ plan: DietPlan | null }>("/member/diet"),
 };
 
 // ---- Staff ----
@@ -387,6 +462,8 @@ export const staffApi = {
     request<StaffRow & { userId: string }>("/staff", { method: "POST", body: input }),
   remove: (userId: string, branchId: string, role: InvitableRole) =>
     request<{ ok: true }>(`/staff/${userId}`, { method: "DELETE", query: { branchId, role } }),
+  updatePtRate: (userId: string, input: { branchId: string; role: InvitableRole; ptRatePerSessionPaise: number }) =>
+    request<{ ok: true }>(`/staff/${userId}/pt-rate`, { method: "PATCH", body: input }),
 };
 
 // ---- Franchisees ----
@@ -396,6 +473,39 @@ export const franchiseesApi = {
   network: () => request<Network>("/franchisees/network"),
   invite: (name: string, email: string) => request<{ franchisee: FranchiseeRow }>("/franchisees", { method: "POST", body: { name, email } }),
   remove: (id: string) => request<{ ok: true }>(`/franchisees/${id}`, { method: "DELETE" }),
+};
+
+// ---- Expenses ----
+
+export const expensesApi = {
+  list: (params: { branchId?: string; category?: ExpenseCategory; from?: string; to?: string; page?: number; pageSize?: number } = {}) =>
+    request<{ expenses: Expense[]; pagination: Pagination; totalPaise: number }>("/expenses", { query: params }),
+
+  create: (input: { branchId: string; category: ExpenseCategory; description: string; vendor?: string; amountPaise: number; date?: string }) =>
+    request<{ expense: Expense }>("/expenses", { method: "POST", body: input }),
+
+  remove: (id: string) => request<{ ok: true }>(`/expenses/${id}`, { method: "DELETE" }),
+};
+
+// ---- Leads & enquiries ----
+
+export const leadsApi = {
+  list: (params: { search?: string; status?: LeadStatus; branchId?: string; page?: number; pageSize?: number } = {}) =>
+    request<{ leads: Lead[]; pagination: Pagination }>("/leads", { query: params }),
+
+  create: (input: { branchId: string; name: string; phone: string; email?: string; source?: LeadSource; followUpDate?: string; notes?: string }) =>
+    request<{ lead: Lead }>("/leads", { method: "POST", body: input }),
+
+  update: (id: string, input: { status?: LeadStatus; assignedToUserId?: string; followUpDate?: string; notes?: string; lostReason?: string }) =>
+    request<{ lead: Lead }>(`/leads/${id}`, { method: "PATCH", body: input }),
+
+  remove: (id: string) => request<{ ok: true }>(`/leads/${id}`, { method: "DELETE" }),
+};
+
+// ---- Trainer dashboard ----
+
+export const trainerApi = {
+  ptPackages: () => request<{ packages: TrainerPtPackageRow[] }>("/trainer/pt-packages"),
 };
 
 export { tokenStore };
