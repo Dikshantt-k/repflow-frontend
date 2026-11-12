@@ -142,7 +142,7 @@ export default function AddMemberPage() {
     try {
       let razorpayProof: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string } | undefined;
       if (mode === "upi" && amountPaidPaise > 0) {
-        const order = await paymentsApi.createRazorpayOrder(amountPaidPaise);
+        const order = await paymentsApi.createRazorpayOrder(amountPaidPaise, { branchId });
         razorpayProof = await collectUpiPayment({
           order,
           orgName: context?.org?.name ?? "Repflow",

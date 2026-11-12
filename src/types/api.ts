@@ -617,3 +617,52 @@ export interface CountryOption {
   gateway: "razorpay" | "stripe";
 }
 
+
+// ---- Per-gym payments ----
+
+export type PaymentProvider = "razorpay_oauth" | "razorpay_keys" | "mock";
+export type PaymentAccountLevel = "org" | "franchisee" | "branch";
+
+/** An order created on the gym's own payment account. `keyId` is what checkout takes as `key` ("mock" for the test gateway). */
+export interface GatewayOrder {
+  orderId: string;
+  amountPaise: number;
+  currency?: string;
+  provider?: PaymentProvider;
+  keyId: string;
+  accountName?: string;
+}
+
+export interface PaymentAccountTarget {
+  level: PaymentAccountLevel;
+  franchiseeId?: string;
+  branchId?: string;
+}
+
+export interface PaymentAccount {
+  _id: string;
+  level: PaymentAccountLevel;
+  franchiseeId: string | null;
+  branchId: string | null;
+  provider: PaymentProvider;
+  externalAccountId: string;
+  displayName: string;
+  livemode: boolean;
+  connectedAt?: string;
+}
+
+export interface PaymentAccountsOverview {
+  accounts: PaymentAccount[];
+  branches: Array<{
+    _id: string;
+    name: string;
+    franchiseeId: string | null;
+    franchiseeName: string | null;
+    paysInto: { accountId: string; level: PaymentAccountLevel; displayName: string; provider: PaymentProvider } | null;
+    canManage: boolean;
+  }>;
+  franchisees: Array<{ _id: string; name: string; canManage: boolean }>;
+  canManageOrg: boolean;
+  providers: PaymentProvider[];
+  country: CountryCode;
+}

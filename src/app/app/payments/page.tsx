@@ -16,6 +16,10 @@ function memberLabel(memberId: string | { firstName: string; lastName?: string }
   return `${memberId.firstName} ${memberId.lastName ?? ""}`.trim();
 }
 
+function memberIdOf(due: Dues): string {
+  return typeof due.memberId === "string" ? due.memberId : due.memberId._id;
+}
+
 function memberPhone(memberId: string | { phone?: string }): string | undefined {
   return typeof memberId === "string" ? undefined : memberId.phone;
 }
@@ -133,7 +137,7 @@ export default function PaymentsPage() {
     try {
       let razorpayProof: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string } | undefined;
       if (mode === "upi") {
-        const order = await paymentsApi.createRazorpayOrder(amountPaidPaise);
+        const order = await paymentsApi.createRazorpayOrder(amountPaidPaise, { memberId: selectedMember.id });
         razorpayProof = await collectUpiPayment({ order, orgName: context?.org?.name ?? "Repflow", description: description.trim() });
         paid = true;
       }
@@ -195,7 +199,7 @@ export default function PaymentsPage() {
     try {
       let razorpayProof: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string } | undefined;
       if (collectMode === "upi") {
-        const order = await paymentsApi.createRazorpayOrder(amountPaise);
+        const order = await paymentsApi.createRazorpayOrder(amountPaise, { memberId: memberIdOf(collectingDue) });
         razorpayProof = await collectUpiPayment({
           order,
           orgName: context?.org?.name ?? "Repflow",

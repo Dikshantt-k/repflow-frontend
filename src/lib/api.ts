@@ -45,6 +45,10 @@ import type {
   OrgLocale,
   CountryOption,
   CountryCode,
+  GatewayOrder,
+  PaymentAccount,
+  PaymentAccountTarget,
+  PaymentAccountsOverview,
 } from "@/types/api";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
@@ -388,8 +392,36 @@ export const paymentsApi = {
 
   sendReceipt: (id: string) => request<{ ok: true }>(`/payments/${id}/send-receipt`, { method: "POST" }),
 
-  createRazorpayOrder: (amountPaise: number) =>
-    request<{ orderId: string; amountPaise: number; keyId: string }>("/payments/razorpay/order", { method: "POST", body: { amountPaise } }),
+  /**
+   * An online (UPI) order on the gym's own payment account. Pass the member (existing member) or
+   * branch (new member) so the money goes to that gym's account.
+   */
+  createRazorpayOrder: (amountPaise: number, target: { memberId?: string; branchId?: string }) =>
+    request<GatewayOrder>("/payments/razorpay/order", { method: "POST", body: { amountPaise, ...target } }),
+};
+
+// ---- Per-gym payment accounts ----
+
+export const paymentAccountsApi = {
+  list: () => request<PaymentAccountsOverview>("/payment-accounts"),
+  connectMock: (target: PaymentAccountTarget & { displayName?: string }) =>
+    request<{ account: PaymentAccount }>("/payment-accounts/mock", { method: "POST", body: target }),
+  connectRazorpayKeys: (target: PaymentAccountTarget & { keyId: string; keySecret: string; displayName?: string }) =>
+    request<{ account: PaymentAccount }>("/payment-accounts/razorpay-keys", { method: "POST", body: target }),
+  razorpayConnectUrl: (target: PaymentAccountTarget) =>
+    request<{ url: string }>("/payment-accounts/razorpay/connect-url", { method: "POST", body: target }),
+  razorpayCallback: (code: string, state: string) =>
+    request<{ account: PaymentAccount }>("/payment-accounts/razorpay/callback", { method: "POST", body: { code, state } }),
+  disconnect: (id: string) => request<{ ok: true }>(`/payment-accounts/${id}`, { method: "DELETE" }),
+};
+
+/** The test gateway's "checkout": returns a signed proof for a mock order (no real money). */
+export const mockGatewayApi = {
+  pay: (orderId: string) =>
+    request<{ razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string }>("/payment-gateway/mock/pay", {
+      method: "POST",
+      body: { orderId },
+    }),
 };
 
 // ---- Dues ----
@@ -478,9 +510,8 @@ export const meApi = {
   summary: () => request<MeMemberSummary>("/member/me"),
   attendance: (month?: string) => request<{ attendance: Attendance[]; count: number }>("/member/attendance", { query: { month } }),
   payments: () => request<{ payments: Payment[] }>("/member/payments"),
-  plans: () => request<{ plans: Plan[] }>("/member/plans"),
-  createRenewOrder: (planId: string) =>
-    request<{ orderId: string; amountPaise: number; keyId: string }>("/member/renew/order", { method: "POST", body: { planId } }),
+  plans: () => request<{ plans: Plan[]; onlinePayments?: boolean }>("/member/plans"),
+  createRenewOrder: (planId: string) => request<GatewayOrder>("/member/renew/order", { method: "POST", body: { planId } }),
   renew: (input: { planId: string; razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string }) =>
     request<{ membershipId: string; receiptNo: string; balancePaise: number }>("/member/renew", { method: "POST", body: input }),
   freezeRequest: (input: { fromDate: string; days: number; reason: "travel" | "medical" | "exams" | "other" }) =>

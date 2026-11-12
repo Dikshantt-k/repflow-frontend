@@ -17,10 +17,12 @@ export default function MemberRenewPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [onlinePayments, setOnlinePayments] = useState(true);
 
   useEffect(() => {
     meApi.plans().then((res) => {
       setPlans(res.plans);
+      setOnlinePayments(res.onlinePayments !== false);
       setSelected(res.plans[0]?._id ?? null);
     });
     // Preload now so the only await left in the click handler is creating the order —
@@ -42,7 +44,7 @@ export default function MemberRenewPage() {
         keyId: order.keyId,
         order_id: order.orderId,
         amount: order.amountPaise,
-        currency: "INR",
+        currency: order.currency ?? "INR",
         name: context?.org?.name ?? "Repflow",
         description: `${plan.name} renewal`,
         theme: { color: "#16a34a" },
@@ -90,6 +92,20 @@ export default function MemberRenewPage() {
 
       {plans.length === 0 ? (
         <p className="text-muted">No plans are available for online renewal right now — ask the front desk.</p>
+      ) : !onlinePayments ? (
+        // Per-gym payments: the gym hasn't connected its own payment account yet, so online payment is off.
+        <Card>
+          <p className="font-semibold">Online payment isn&apos;t available at your gym yet.</p>
+          <p className="text-sm text-muted mt-1">You can renew at the front desk. Your plans and prices are below for reference.</p>
+          <ul className="mt-2 text-sm">
+            {plans.map((p) => (
+              <li key={p._id} className="flex justify-between py-1">
+                <span>{p.name}</span>
+                <span className="font-semibold">{formatPaise(p.pricePaise)}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
       ) : (
         <>
           <div className="flex flex-col gap-2">
