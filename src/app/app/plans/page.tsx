@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { can } from "@/lib/permissions";
 import { Badge, Button, Card, EmptyState, Field, Input, Pill, Spinner } from "@/components/ui";
 import { formatPaise } from "@/lib/format";
+import { orgLocale } from "@/lib/locale";
 import { PlanDialog } from "@/components/PlanDialog";
 import type { Branch, Plan, PlanStatus } from "@/types/api";
 
@@ -63,7 +64,9 @@ export default function PlansPage() {
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <h1>Membership plans</h1>
-          <p className="text-muted mt-1">Prices include 18% GST.</p>
+          <p className="text-muted mt-1">
+            {orgLocale().tax.ratePct > 0 ? `Prices include ${orgLocale().tax.ratePct}% ${orgLocale().tax.name}.` : "Prices don't include tax."}
+          </p>
         </div>
         {canManage && (
           <Button variant="primary" onClick={openCreate}>

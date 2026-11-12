@@ -7,6 +7,7 @@ import { collectUpiPayment, loadRazorpayScript } from "@/lib/razorpay";
 import { can } from "@/lib/permissions";
 import { Button, Card, EmptyState, Field, Input, Kpi, Modal, Pill, Spinner, Toast } from "@/components/ui";
 import { formatDate, formatPaise, rupeesToPaise } from "@/lib/format";
+import { currencySymbol, orgLocale } from "@/lib/locale";
 import { ReceiptModal } from "@/components/ReceiptModal";
 import type { Dues, Member, Payment, PaymentMode } from "@/types/api";
 
@@ -118,12 +119,12 @@ export default function PaymentsPage() {
     }
     const amount = Number(amountRupees);
     if (!amountRupees.trim() || !(amount > 0)) {
-      setRecordError("Enter an amount above ₹0.");
+      setRecordError(`Enter an amount above ${currencySymbol()}0.`);
       return;
     }
     const amountPaidPaise = rupeesToPaise(amount);
     if (mode === "upi" && amountPaidPaise < 100) {
-      setRecordError("Enter at least ₹1 to collect via UPI.");
+      setRecordError(`Enter at least ${currencySymbol()}1 to collect via UPI.`);
       return;
     }
 
@@ -180,12 +181,12 @@ export default function PaymentsPage() {
     setCollectError(null);
     const amount = Number(collectAmountRupees);
     if (!collectAmountRupees.trim() || !(amount > 0)) {
-      setCollectError("Enter an amount above ₹0.");
+      setCollectError(`Enter an amount above ${currencySymbol()}0.`);
       return;
     }
     const amountPaise = rupeesToPaise(amount);
     if (collectMode === "upi" && amountPaise < 100) {
-      setCollectError("Enter at least ₹1 to collect via UPI.");
+      setCollectError(`Enter at least ${currencySymbol()}1 to collect via UPI.`);
       return;
     }
 
@@ -299,7 +300,7 @@ export default function PaymentsPage() {
           </Field>
 
           <Field label="Amount">
-            <Input inputMode="decimal" value={amountRupees} onChange={(e) => setAmountRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder="₹" />
+            <Input inputMode="decimal" value={amountRupees} onChange={(e) => setAmountRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder={`${currencySymbol()}`} />
           </Field>
 
           <div className="flex gap-2">
@@ -316,7 +317,7 @@ export default function PaymentsPage() {
 
           <label className="flex items-center gap-2 text-sm font-medium">
             <input type="checkbox" checked={gstInvoice} onChange={(e) => setGstInvoice(e.target.checked)} className="w-[18px] h-[18px] accent-accent" />
-            GST invoice
+            {orgLocale().tax.name} invoice
           </label>
 
           {recordError && <p className="text-sm font-semibold text-warn">{recordError}</p>}
@@ -446,7 +447,7 @@ export default function PaymentsPage() {
                 onChange={(e) => setCollectGstInvoice(e.target.checked)}
                 className="w-[18px] h-[18px] accent-accent"
               />
-              GST invoice
+              {orgLocale().tax.name} invoice
             </label>
             {collectError && <p className="text-sm font-semibold text-warn">{collectError}</p>}
             <div className="flex gap-2 border-t border-line2 pt-3">

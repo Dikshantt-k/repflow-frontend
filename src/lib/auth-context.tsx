@@ -4,14 +4,15 @@ import { createContext, useCallback, useContext, useEffect, useState, type React
 import { useRouter } from "next/navigation";
 import { authApi } from "./api";
 import { tokenStore } from "./tokenStore";
-import type { AuthUser, Role } from "@/types/api";
+import type { AuthUser, OrgLocale, Role } from "@/types/api";
+import { setOrgLocale } from "./locale";
 
 export interface MeContext {
   userId: string;
   role: Role;
   orgId?: string;
   branchId?: string;
-  org?: { name: string; city?: string; businessType: string; status: string; logoUrl?: string; modules: string[] } | null;
+  org?: { name: string; city?: string; businessType: string; status: string; logoUrl?: string; modules: string[]; locale?: OrgLocale } | null;
   branch?: { name: string; code: string } | null;
 }
 
@@ -40,6 +41,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
     try {
       const me = await authApi.me();
+      setOrgLocale(me.context.org?.locale); // currency, tax and formats for this gym (Round 3)
       setState({ user: me.user, context: me.context, loading: false });
     } catch {
       tokenStore.clear();
@@ -56,12 +58,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     tokenStore.setTokens(accessToken, refreshToken);
     setState((s) => ({ ...s, user, loading: true }));
     const me = await authApi.me();
+    setOrgLocale(me.context.org?.locale);
     setState({ user: me.user, context: me.context, loading: false });
     return me.context;
   }, []);
 
   const logout = useCallback(() => {
     tokenStore.clear();
+    setOrgLocale(null);
     setState({ user: null, context: null, loading: false });
     router.push("/login");
   }, [router]);

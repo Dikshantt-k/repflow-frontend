@@ -7,6 +7,7 @@ import { ApiError, branchesApi, membersApi, paymentsApi, plansApi, staffApi } fr
 import { useAuth } from "@/lib/auth-context";
 import { collectUpiPayment, loadRazorpayScript } from "@/lib/razorpay";
 import { formatPaise, rupeesToPaise } from "@/lib/format";
+import { currencySymbol, looksLikeMobile, orgLocale, phoneHint } from "@/lib/locale";
 import { Avatar, Button, Card, Field, Input, Modal, Pill, Select } from "@/components/ui";
 import type { Branch, Plan, StaffRow } from "@/types/api";
 
@@ -17,7 +18,6 @@ const GENDERS: Array<{ value: string; label: string }> = [
   { value: "other", label: "Other" },
 ];
 
-const PHONE_REGEX = /^[6-9]\d{9}$/;
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -110,7 +110,7 @@ export default function AddMemberPage() {
     }
   }, [totalPaise]);
 
-  const phoneValid = PHONE_REGEX.test(phone);
+  const phoneValid = looksLikeMobile(phone); // exact check for the gym's country happens on the server (Round 3)
 
   async function submit() {
     setFormError(null);
@@ -121,7 +121,7 @@ export default function AddMemberPage() {
       return;
     }
     if (!phoneValid) {
-      setFormError("Enter a 10-digit mobile number, for example 98200 11234.");
+      setFormError(`Enter a ${phoneHint()}.`);
       return;
     }
     if (!branchId) {
@@ -133,7 +133,7 @@ export default function AddMemberPage() {
       return;
     }
     if (mode === "upi" && amountPaidPaise > 0 && amountPaidPaise < 100) {
-      setFormError("Enter at least ₹1 to collect via UPI.");
+      setFormError(`Enter at least ${currencySymbol()}1 to collect via UPI.`);
       return;
     }
 
@@ -235,12 +235,12 @@ export default function AddMemberPage() {
               <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
             </Field>
           </div>
-          <Field label="Mobile *" hint="We use it for login and WhatsApp updates" error={phone && !phoneValid ? "Enter a 10-digit mobile number, for example 98200 11234." : undefined}>
+          <Field label="Mobile *" hint="We use it for login and WhatsApp updates" error={phone && !phoneValid ? `Enter a ${phoneHint()}.` : undefined}>
             <Input
-              inputMode="numeric"
+              inputMode="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              placeholder="98200 11234"
+              onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s()-]/g, "").slice(0, 20))}
+              placeholder={orgLocale().phone.example}
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
@@ -339,7 +339,7 @@ export default function AddMemberPage() {
                     inputMode="decimal"
                     value={discountRupees}
                     onChange={(e) => setDiscountRupees(e.target.value.replace(/[^\d.]/g, ""))}
-                    placeholder="₹0"
+                    placeholder={`${currencySymbol()}0`}
                     className="w-28 text-right"
                   />
                 </div>
@@ -378,7 +378,7 @@ export default function AddMemberPage() {
 
               <label className="flex items-center gap-2 pt-2 border-t border-line2">
                 <input type="checkbox" checked={gstInvoice} onChange={(e) => setGstInvoice(e.target.checked)} className="w-[18px] h-[18px] accent-accent" />
-                GST invoice
+                {orgLocale().tax.name} invoice
               </label>
               <label className="flex items-center gap-2">
                 <input

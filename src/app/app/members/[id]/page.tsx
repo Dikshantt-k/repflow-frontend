@@ -9,6 +9,7 @@ import { collectUpiPayment, loadRazorpayScript } from "@/lib/razorpay";
 import { can } from "@/lib/permissions";
 import { hasModule } from "@/lib/modules";
 import { daysLeft, formatDate, formatPaise, initials, rupeesToPaise } from "@/lib/format";
+import { currencySymbol, orgLocale } from "@/lib/locale";
 import { Avatar, Badge, Button, Card, Field, Input, Kpi, Modal, Pill, Select, Spinner, Toast, statusBadge } from "@/components/ui";
 import { ReceiptModal } from "@/components/ReceiptModal";
 import type {
@@ -854,7 +855,7 @@ function RenewModal({
     }
     const amountPaidPaise = rupeesToPaise(Number(amountPaidRupees) || 0);
     if (mode === "upi" && amountPaidPaise > 0 && amountPaidPaise < 100) {
-      setError("Enter at least ₹1 to collect via UPI.");
+      setError(`Enter at least ${currencySymbol()}1 to collect via UPI.`);
       return;
     }
     setError(null);
@@ -937,7 +938,7 @@ function RenewModal({
           </div>
           <label className="flex items-center gap-2">
             <input type="checkbox" checked={gstInvoice} onChange={(e) => setGstInvoice(e.target.checked)} className="w-[18px] h-[18px] accent-accent" />
-            GST invoice
+            {orgLocale().tax.name} invoice
           </label>
         </>
       )}
@@ -1146,7 +1147,7 @@ function CreatePtPackageModal({
         <Input inputMode="numeric" value={totalSessions} onChange={(e) => setTotalSessions(e.target.value.replace(/\D/g, ""))} />
       </Field>
       <Field label="Price (optional)" hint="Leave blank to use the trainer's per-session rate × sessions">
-        <Input inputMode="decimal" value={priceRupees} onChange={(e) => setPriceRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder="₹" />
+        <Input inputMode="decimal" value={priceRupees} onChange={(e) => setPriceRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder={`${currencySymbol()}`} />
       </Field>
       <Field label="Valid for (days, optional)">
         <Input inputMode="numeric" value={expiresInDays} onChange={(e) => setExpiresInDays(e.target.value.replace(/\D/g, ""))} />

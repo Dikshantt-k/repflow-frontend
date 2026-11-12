@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { branchesApi, staffApi, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { formatPaise, rupeesToPaise } from "@/lib/format";
+import { currencySymbol } from "@/lib/locale";
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Spinner, Toast } from "@/components/ui";
 import type { Branch, InvitableRole, StaffRow } from "@/types/api";
 
@@ -194,7 +195,7 @@ function PtRateModal({ row, onClose, onSaved }: { row: StaffRow | null; onClose:
     setError(null);
     const rupees = Number(rateRupees);
     if (!rateRupees.trim() || !(rupees > 0)) {
-      setError("Enter a rate above ₹0.");
+      setError(`Enter a rate above ${currencySymbol()}0.`);
       return;
     }
     setBusy(true);
@@ -210,8 +211,8 @@ function PtRateModal({ row, onClose, onSaved }: { row: StaffRow | null; onClose:
 
   return (
     <Modal open={!!row} onClose={onClose} title={row ? `${row.name ?? row.email}'s PT rate` : "PT rate"}>
-      <Field label="Rate per session (₹)" hint="Used to auto-price a PT package when this trainer sells one">
-        <Input inputMode="decimal" value={rateRupees} onChange={(e) => setRateRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder="₹" />
+      <Field label={`Rate per session (${currencySymbol()})`} hint="Used to auto-price a PT package when this trainer sells one">
+        <Input inputMode="decimal" value={rateRupees} onChange={(e) => setRateRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder={`${currencySymbol()}`} />
       </Field>
       {error && <p className="text-sm font-semibold text-warn">{error}</p>}
       <Button variant="primary" disabled={busy} onClick={submit}>

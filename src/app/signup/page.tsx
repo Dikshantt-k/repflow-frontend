@@ -1,11 +1,17 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiError, signupApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button, Field, Input, Select } from "@/components/ui";
 import { rupeesToPaise } from "@/lib/format";
+import type { CountryCode, CountryOption } from "@/types/api";
+
+/** Currency symbol for a country's currency before the gym exists (e.g. "£" for GBP). */
+function symbolFor(currency: string): string {
+  return new Intl.NumberFormat("en", { style: "currency", currency }).formatToParts(0).find((p) => p.type === "currency")?.value ?? currency;
+}
 
 interface PlanDraft {
   name: string;
@@ -35,7 +41,21 @@ function SignupWizard() {
 
   const [gymName, setGymName] = useState("");
   const [city, setCity] = useState("");
-  const [gstin, setGstin] = useState("");
+  const [gstin, setGstin] = useState(""); // the tax ID, labelled per country (GSTIN, TRN, VAT number, EIN, ABN)
+  // Round 3: country sets currency, tax, time zone and phone format for the whole gym.
+  const [countries, setCountries] = useState<CountryOption[]>([]);
+  const [countryCode, setCountryCode] = useState<CountryCode>("IN");
+  const [timeZone, setTimeZone] = useState("");
+  const country = countries.find((c) => c.code === countryCode);
+  const symbol = symbolFor(country?.currency ?? "INR");
+  const taxLabel = country && country.tax.ratePct > 0 ? `incl. ${country.tax.name}` : country ? "" : "incl. GST";
+
+  useEffect(() => {
+    signupApi
+      .countries()
+      .then((r) => setCountries(r.countries))
+      .catch(() => setCountries([])); // falls back to India, as before
+  }, []);
   const [businessType, setBusinessType] = useState<"independent" | "franchise">("independent");
   const [branches, setBranches] = useState<string[]>(["Main branch"]);
   const [branchDraft, setBranchDraft] = useState("");
@@ -64,7 +84,16 @@ function SignupWizard() {
 
       const res = await signupApi.complete({
         sessionToken,
-        gym: { name: gymName, city: city || undefined, gstin: gstin || undefined, businessType },
+        gym: {
+          name: gymName,
+          city: city || undefined,
+          // India keeps sending gstin (older backends read it); every country sends taxId.
+          gstin: countryCode === "IN" ? gstin || undefined : undefined,
+          taxId: gstin || undefined,
+          businessType,
+          country: countryCode,
+          timeZone: timeZone || undefined,
+        },
         branches: branches.map((b) => ({ name: b })),
         plans: validPlans.map((p) => ({
           name: p.name,
@@ -135,10 +164,43 @@ function SignupWizard() {
                 <Field label="City">
                   <Input value={city} onChange={(e) => setCity(e.target.value)} />
                 </Field>
-                <Field label="GSTIN (optional)">
+                <Field label={`${country?.tax.taxIdLabel ?? "GSTIN"} (optional)`}>
                   <Input value={gstin} onChange={(e) => setGstin(e.target.value)} />
                 </Field>
               </div>
+              {countries.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Country" hint={country ? `${country.currency} · ${country.tax.name} ${country.tax.ratePct}% · ${country.phone.dialCode}` : undefined}>
+                    <Select
+                      value={countryCode}
+                      onChange={(e) => {
+                        setCountryCode(e.target.value as CountryCode);
+                        setTimeZone("");
+                      }}
+                    >
+                      {countries.map((c) => (
+                        <option key={c.code} value={c.code}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  {country && country.timeZones.length > 1 && (
+                    <Field label="Time zone">
+                      <Select value={timeZone || country.timeZones[0]} onChange={(e) => setTimeZone(e.target.value)}>
+                        {country.timeZones.map((tz) => (
+                          <option key={tz} value={tz}>
+                            {tz.split("/").pop()!.replace(/_/g, " ")}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  )}
+                </div>
+              )}
+              {countryCode === "US" && (
+                <p className="text-sm text-muted">Sales tax starts at 0%. Set your state&apos;s rate later in Settings if gym memberships are taxed where you are.</p>
+              )}
               <Field label="Business type">
                 <Select value={businessType} onChange={(e) => setBusinessType(e.target.value as "independent" | "franchise")}>
                   <option value="independent">Independent gym</option>
@@ -181,10 +243,10 @@ function SignupWizard() {
                   <Field label="Plan name">
                     <Input value={p.name} onChange={(e) => updatePlan(i, { name: e.target.value })} className="w-40" />
                   </Field>
-                  <Field label="Price (incl. GST)">
+                  <Field label={taxLabel ? `Price (${taxLabel})` : "Price"}>
                     <Input
                       inputMode="decimal"
-                      placeholder="₹"
+                      placeholder={symbol}
                       value={p.priceRupees}
                       onChange={(e) => updatePlan(i, { priceRupees: e.target.value.replace(/[^\d.]/g, "") })}
                       className="w-32"
@@ -193,7 +255,7 @@ function SignupWizard() {
                   <Field label="Joining fee">
                     <Input
                       inputMode="decimal"
-                      placeholder="₹0"
+                      placeholder={`${symbol}0`}
                       value={p.joiningFeeRupees}
                       onChange={(e) => updatePlan(i, { joiningFeeRupees: e.target.value.replace(/[^\d.]/g, "") })}
                       className="w-28"
