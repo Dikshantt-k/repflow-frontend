@@ -9,6 +9,7 @@ import { hasModule } from "@/lib/modules";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { initials } from "@/lib/format";
 import { Spinner } from "@/components/ui";
+import { AccountStatusBanner } from "@/components/AccountStatusBanner";
 
 export default function AppShellLayout({ children }: { children: React.ReactNode }) {
   const { user, context, loading, logout } = useAuth();
@@ -95,7 +96,10 @@ export default function AppShellLayout({ children }: { children: React.ReactNode
       </aside>
 
       <main className="flex-[999] basis-[560px] min-w-0 p-7 px-8 pb-12 flex flex-col gap-5">
-        <div className="w-full max-w-[1440px] mx-auto flex flex-col gap-5">{children}</div>
+        <div className="w-full max-w-[1440px] mx-auto flex flex-col gap-5">
+          <AccountStatusBanner />
+          {children}
+        </div>
       </main>
     </div>
   );

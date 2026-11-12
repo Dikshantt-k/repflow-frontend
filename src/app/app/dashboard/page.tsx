@@ -6,6 +6,8 @@ import { dashboardApi } from "@/lib/api";
 import type { DashboardSummary } from "@/types/api";
 import { Avatar, Button, Card, EmptyState, Kpi, Spinner, Toast } from "@/components/ui";
 import { formatDate, formatPaise, initials } from "@/lib/format";
+import { OnboardingChecklist } from "@/components/OnboardingChecklist";
+import { useAuth } from "@/lib/auth-context";
 
 function LinkButton({ href, variant = "default", children }: { href: string; variant?: "primary" | "default"; children: ReactNode }) {
   const base = "inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-[10px] font-semibold text-sm whitespace-nowrap transition";
@@ -26,6 +28,7 @@ function hourLabel(h: number): string {
 }
 
 export default function DashboardPage() {
+  const { context } = useAuth();
   const [data, setData] = useState<DashboardSummary | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
@@ -53,6 +56,7 @@ export default function DashboardPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      {context?.role === "org_owner" && <OnboardingChecklist />}
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <h1>Today</h1>
