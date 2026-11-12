@@ -73,6 +73,11 @@ export interface Plan {
   /** India only */
   gst?: GstBreakdown;
   tax?: TaxBreakdown;
+  /** Round 5: what a member is charged (price + tax when the gym's prices are before tax). */
+  chargePaise?: number;
+  taxInclusive?: boolean;
+  /** Member app only: memberships first, personal training / class packs in their own section. */
+  kind?: "membership" | "sessions";
 }
 
 export type Gender = "prefer_not_to_say" | "female" | "male" | "other";
@@ -598,7 +603,7 @@ export interface OrgLocale {
   currency: string;
   locale: string;
   timeZone: string;
-  tax: { name: string; ratePct: number; split?: "cgst_sgst" };
+  tax: { name: string; ratePct: number; split?: "cgst_sgst"; inclusive?: boolean };
   taxIdLabel: string;
   taxId?: string;
   gateway: "razorpay" | "stripe";

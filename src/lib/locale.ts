@@ -35,9 +35,26 @@ export function currencySymbol(): string {
   return part?.value ?? current.currency;
 }
 
-/** "incl. GST", "incl. VAT", or "" when the gym charges no tax (e.g. US default 0%). */
+/** Do the gym's prices already include tax? (Round 5: US gyms default to "no", tax added on top.) */
+export function pricesIncludeTax(): boolean {
+  return current.tax.inclusive !== false;
+}
+
+/** What a member pays for a list price: the price itself, or price + tax in a tax-exclusive gym. Same rounding as the backend's chargeFor(). */
+export function chargeFor(listPaise: number): number {
+  if (pricesIncludeTax()) return listPaise;
+  return listPaise + Math.round((listPaise * Math.max(0, current.tax.ratePct)) / 100);
+}
+
+/** "incl. GST", "incl. VAT", "+ Sales tax", or "" when the gym charges no tax (e.g. US default 0%). */
 export function inclTaxLabel(): string {
-  return current.tax.ratePct > 0 ? `incl. ${current.tax.name}` : "";
+  if (current.tax.ratePct <= 0) return "";
+  return pricesIncludeTax() ? `incl. ${current.tax.name}` : `incl. ${current.tax.name} added`;
+}
+
+/** Shown next to a list price: "" in a tax-inclusive gym, "+ Sales tax" in a tax-exclusive one. */
+export function plusTaxSuffix(): string {
+  return !pricesIncludeTax() && current.tax.ratePct > 0 ? ` + ${current.tax.name}` : "";
 }
 
 /** Same rounding as the backend's taxSplit(): each line rounded first, taxable value derived. */

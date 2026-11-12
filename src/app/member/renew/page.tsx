@@ -101,41 +101,55 @@ export default function MemberRenewPage() {
             {plans.map((p) => (
               <li key={p._id} className="flex justify-between py-1">
                 <span>{p.name}</span>
-                <span className="font-semibold">{formatPaise(p.pricePaise)}</span>
+                <span className="font-semibold">{formatPaise(p.chargePaise ?? p.pricePaise)}</span>
               </li>
             ))}
           </ul>
         </Card>
       ) : (
         <>
-          <div className="flex flex-col gap-2">
-            {plans.map((p) => (
-              <label
-                key={p._id}
-                className={`flex items-center justify-between gap-3 p-3.5 rounded-xl border ${
-                  selected === p._id ? "border-accent bg-accent-soft" : "border-line bg-surface"
-                }`}
-              >
-                <div className="flex items-center gap-2.5">
-                  <input type="radio" checked={selected === p._id} onChange={() => setSelected(p._id)} />
-                  <div>
-                    <p className="font-semibold">{p.name}</p>
-                    <p className="text-sm text-muted">
-                      {p.lengthValue} {p.lengthUnit}
-                      {p.lengthValue > 1 ? "s" : ""}
-                    </p>
-                  </div>
-                </div>
-                <span className="font-semibold">{formatPaise(p.pricePaise)}</span>
-              </label>
-            ))}
-          </div>
+          {/* Round 5: memberships first, then personal training / class packs in their own section. */}
+          {(
+            [
+              ["membership", "Memberships"],
+              ["sessions", "Personal training & class packs"],
+            ] as const
+          ).map(([kind, heading]) => {
+            const group = plans.filter((p) => (p.kind ?? (p.lengthUnit === "session" ? "sessions" : "membership")) === kind);
+            if (group.length === 0) return null;
+            return (
+              <section key={kind} className="flex flex-col gap-2">
+                <h2 className="text-lg">{heading}</h2>
+                {group.map((p) => (
+                  <label
+                    key={p._id}
+                    className={`flex items-center justify-between gap-3 p-3.5 rounded-xl border ${
+                      selected === p._id ? "border-accent bg-accent-soft" : "border-line bg-surface"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <input type="radio" checked={selected === p._id} onChange={() => setSelected(p._id)} />
+                      <div>
+                        <p className="font-semibold">{p.name}</p>
+                        <p className="text-sm text-muted">
+                          {p.lengthValue} {p.lengthUnit}
+                          {p.lengthValue > 1 ? "s" : ""}
+                          {p.lengthUnit === "session" && p.validityDaysForSessions ? ` within ${p.validityDaysForSessions} days` : ""}
+                        </p>
+                      </div>
+                    </div>
+                    <span className="font-semibold">{formatPaise(p.chargePaise ?? p.pricePaise)}</span>
+                  </label>
+                ))}
+              </section>
+            );
+          })}
 
           {plan && (
             <Card>
               <div className="flex justify-between">
                 <span className="text-muted">{inclTaxLabel() ? `Total (${inclTaxLabel()})` : "Total"}</span>
-                <b className="font-display text-2xl">{formatPaise(plan.tax?.totalPaise ?? plan.gst?.totalPaise ?? plan.pricePaise)}</b>
+                <b className="font-display text-2xl">{formatPaise(plan.chargePaise ?? plan.tax?.totalPaise ?? plan.gst?.totalPaise ?? plan.pricePaise)}</b>
               </div>
             </Card>
           )}

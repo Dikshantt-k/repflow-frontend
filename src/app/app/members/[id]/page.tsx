@@ -9,7 +9,7 @@ import { collectUpiPayment, loadRazorpayScript } from "@/lib/razorpay";
 import { can } from "@/lib/permissions";
 import { hasModule } from "@/lib/modules";
 import { formatDate, formatPaise, initials, rupeesToPaise, daysLeftLabel } from "@/lib/format";
-import { currencySymbol, orgLocale } from "@/lib/locale";
+import { chargeFor, currencySymbol, inclTaxLabel, orgLocale, plusTaxSuffix, pricesIncludeTax } from "@/lib/locale";
 import { Avatar, Badge, Button, Card, Field, Input, Kpi, Modal, Pill, Select, Spinner, Toast, statusBadge } from "@/components/ui";
 import { ReceiptModal } from "@/components/ReceiptModal";
 import type {
@@ -849,7 +849,8 @@ function RenewModal({
 
   const selectedPlan = useMemo(() => plans.find((p) => p._id === planId) ?? null, [plans, planId]);
   const discountPaise = rupeesToPaise(Number(discountRupees) || 0);
-  const totalPaise = selectedPlan ? Math.max(selectedPlan.pricePaise - discountPaise, 0) : 0;
+  // Round 5: tax on top of the discounted price in a tax-exclusive gym, as on the server.
+  const totalPaise = selectedPlan ? chargeFor(Math.max(selectedPlan.pricePaise - discountPaise, 0)) : 0;
 
   useEffect(() => {
     // Prefill the amount field from the computed total each time the plan/discount changes.
@@ -920,6 +921,7 @@ function RenewModal({
           {plans.map((p) => (
             <option key={p._id} value={p._id}>
               {p.name} — {formatPaise(p.pricePaise)}
+              {plusTaxSuffix()}
             </option>
           ))}
         </Select>
@@ -942,7 +944,7 @@ function RenewModal({
             <Input inputMode="decimal" value={amountPaidRupees} onChange={(e) => setAmountPaidRupees(e.target.value.replace(/[^\d.]/g, ""))} />
           </Field>
           <div className="flex justify-between font-semibold">
-            <span>Total</span>
+            <span>{!pricesIncludeTax() && inclTaxLabel() ? `Total (${inclTaxLabel()})` : "Total"}</span>
             <span>{formatPaise(totalPaise)}</span>
           </div>
           <label className="flex items-center gap-2">

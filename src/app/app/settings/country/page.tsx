@@ -6,6 +6,15 @@ import { useAuth } from "@/lib/auth-context";
 import { Button, Card, Field, Input, Select, Spinner, Toast } from "@/components/ui";
 import type { CountryCode, CountryOption, OrgLocale } from "@/types/api";
 
+/** The currency's symbol for the example sentence ("₹", "$"). */
+function currencySymbolSafe(l: OrgLocale): string {
+  try {
+    return new Intl.NumberFormat(l.locale, { style: "currency", currency: l.currency }).formatToParts(0).find((p) => p.type === "currency")?.value ?? l.currency;
+  } catch {
+    return l.currency;
+  }
+}
+
 /** "America/Los_Angeles" → "Los Angeles" */
 function zoneLabel(tz: string): string {
   return tz.split("/").pop()!.replace(/_/g, " ");
@@ -33,6 +42,7 @@ export default function CountrySettingsPage() {
   const [taxName, setTaxName] = useState("");
   const [taxRate, setTaxRate] = useState("");
   const [taxId, setTaxId] = useState("");
+  const [taxInclusive, setTaxInclusive] = useState(true);
 
   function fill(l: OrgLocale) {
     setLocale(l);
@@ -41,6 +51,7 @@ export default function CountrySettingsPage() {
     setTaxName(l.tax.name);
     setTaxRate(String(l.tax.ratePct));
     setTaxId(l.taxId ?? "");
+    setTaxInclusive(l.tax.inclusive !== false);
   }
 
   async function load() {
@@ -81,7 +92,7 @@ export default function CountrySettingsPage() {
       const res = await orgLocaleApi.update(
         countryChanged
           ? { country } // a new country resets tax and time zone to its defaults
-          : { timeZone, taxName: taxName.trim() || undefined, taxRatePct: rate, taxId: taxId.trim() }
+          : { timeZone, taxName: taxName.trim() || undefined, taxRatePct: rate, taxId: taxId.trim(), taxInclusive }
       );
       fill(res.locale);
       await refresh(); // so amounts and labels across the app switch straight away
@@ -152,13 +163,34 @@ export default function CountrySettingsPage() {
             <Field label="Tax name" hint="Shown on receipts">
               <Input value={taxName} disabled={!isOwner} onChange={(e) => setTaxName(e.target.value)} />
             </Field>
-            <Field label="Tax rate (%)" hint="Prices include this tax">
+            <Field label="Tax rate (%)" hint={taxInclusive ? "Prices include this tax" : "Added on top of prices"}>
               <Input inputMode="decimal" value={taxRate} disabled={!isOwner} onChange={(e) => setTaxRate(e.target.value.replace(/[^\d.]/g, ""))} />
             </Field>
             <Field label={locale.taxIdLabel} hint="Printed on receipts">
               <Input value={taxId} disabled={!isOwner} onChange={(e) => setTaxId(e.target.value)} />
             </Field>
           </div>
+        )}
+
+        {!countryChanged && (
+          <label className="flex items-start gap-3 rounded-xl border border-line p-3">
+            <input
+              type="checkbox"
+              className="mt-1 w-[18px] h-[18px] accent-accent"
+              checked={taxInclusive}
+              disabled={!isOwner}
+              onChange={(e) => setTaxInclusive(e.target.checked)}
+            />
+            <span>
+              <span className="font-semibold">Prices include tax</span>
+              <span className="block text-sm text-muted">
+                {taxInclusive
+                  ? `A ${currencySymbolSafe(locale)}1,000 plan costs the member ${currencySymbolSafe(locale)}1,000, with the tax inside it.`
+                  : `Tax is added at the desk: a ${currencySymbolSafe(locale)}1,000 plan costs the member ${currencySymbolSafe(locale)}1,000 + ${taxRate || 0}% ${taxName || "tax"}. Usual in the US.`}{" "}
+                Applies to new sales; past receipts don&apos;t change.
+              </span>
+            </span>
+          </label>
         )}
 
         {error && <p className="text-sm text-warn">{error}</p>}

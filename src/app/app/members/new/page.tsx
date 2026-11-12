@@ -7,7 +7,7 @@ import { ApiError, branchesApi, membersApi, paymentsApi, plansApi, staffApi } fr
 import { useAuth } from "@/lib/auth-context";
 import { collectUpiPayment, loadRazorpayScript } from "@/lib/razorpay";
 import { formatPaise, rupeesToPaise } from "@/lib/format";
-import { currencySymbol, looksLikeMobile, orgLocale, phoneHint } from "@/lib/locale";
+import { chargeFor, currencySymbol, inclTaxLabel, looksLikeMobile, orgLocale, phoneHint, plusTaxSuffix, pricesIncludeTax } from "@/lib/locale";
 import { Avatar, Button, Card, Field, Input, Modal, Pill, Select } from "@/components/ui";
 import type { Branch, Plan, StaffRow } from "@/types/api";
 
@@ -25,7 +25,7 @@ function todayIso(): string {
 
 function planLabel(plan: Plan): string {
   const length = plan.lengthUnit === "session" ? `${plan.lengthValue} sessions` : `${plan.lengthValue} ${plan.lengthUnit}${plan.lengthValue === 1 ? "" : "s"}`;
-  return `${plan.name} — ${length} — ${formatPaise(plan.pricePaise)}`;
+  return `${plan.name} — ${length} — ${formatPaise(plan.pricePaise)}${plusTaxSuffix()}`;
 }
 
 export default function AddMemberPage() {
@@ -99,7 +99,8 @@ export default function AddMemberPage() {
 
   const discountPaise = rupeesToPaise(Number(discountRupees) || 0);
   const joiningFeePaise = selectedPlan && !joiningFeeWaived ? selectedPlan.joiningFeePaise : 0;
-  const totalPaise = selectedPlan ? Math.max(selectedPlan.pricePaise + joiningFeePaise - discountPaise, 0) : 0;
+  // Round 5: in a tax-exclusive gym (US default) the tax goes on top of the discounted price, as on the server.
+  const totalPaise = selectedPlan ? chargeFor(Math.max(selectedPlan.pricePaise + joiningFeePaise - discountPaise, 0)) : 0;
   const amountPaidPaise = rupeesToPaise(Number(amountPaidRupees) || 0);
   const balancePaise = Math.max(totalPaise - amountPaidPaise, 0);
 
@@ -323,7 +324,7 @@ export default function AddMemberPage() {
             <Card>
               <h2 className="text-xl">Payment</h2>
               <div className="flex flex-col">
-                <Row label="Plan price" value={formatPaise(selectedPlan.pricePaise)} />
+                <Row label={`Plan price${plusTaxSuffix()}`} value={formatPaise(selectedPlan.pricePaise)} />
                 {selectedPlan.joiningFeePaise > 0 && (
                   <div className="flex justify-between items-center gap-3 py-2.5 border-t border-line2">
                     <label className="flex items-center gap-2">
@@ -344,7 +345,7 @@ export default function AddMemberPage() {
                   />
                 </div>
                 <div className="flex justify-between items-center gap-3 py-2.5 border-t border-line2">
-                  <span className="font-semibold">Total</span>
+                  <span className="font-semibold">{!pricesIncludeTax() && inclTaxLabel() ? `Total (${inclTaxLabel()})` : "Total"}</span>
                   <b className="font-display text-2xl">{formatPaise(totalPaise)}</b>
                 </div>
               </div>
