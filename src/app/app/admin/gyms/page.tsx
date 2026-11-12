@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { adminApi } from "@/lib/api";
-import { formatPaise } from "@/lib/format";
+import { formatDate, formatPaise } from "@/lib/format";
 import { Badge, Card, EmptyState, Field, Input, Kpi, Pill, Spinner } from "@/components/ui";
 import type { AdminGymRow, AdminGymsKpis, OrgStatus } from "@/types/api";
 
@@ -47,8 +47,10 @@ export default function AdminGymsPage() {
     <>
       <h1 className="text-3xl">Gyms</h1>
 
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
         <Kpi label="Client gyms" value={kpis.clientGyms} />
+        <Kpi label="Self sign-ups (30 days)" value={kpis.selfSignups30d ?? 0} />
+        <Kpi label="Setup not finished" value={kpis.setupIncomplete ?? 0} />
         <Kpi label="Branches live" value={kpis.branchesLive} />
         <Kpi label="On trial" value={kpis.onTrial} />
         <Kpi label="Monthly recurring revenue" value={formatPaise(kpis.mrrPaise)} sub="excl. GST" />
@@ -81,6 +83,7 @@ export default function AdminGymsPage() {
                   <th className="p-3 bg-line2 text-right">Franchisees</th>
                   <th className="p-3 bg-line2 text-right">Branches</th>
                   <th className="p-3 bg-line2">Package</th>
+                  <th className="p-3 bg-line2">Setup</th>
                   <th className="p-3 bg-line2">Status</th>
                   <th className="p-3 bg-line2 text-right rounded-r-lg">MRR</th>
                 </tr>
@@ -98,7 +101,25 @@ export default function AdminGymsPage() {
                     <td className="p-3 text-right">{g.franchiseeCount || "—"}</td>
                     <td className="p-3 text-right">{g.branchCount}</td>
                     <td className="p-3">{g.packageName ?? "—"}</td>
-                    <td className="p-3">{statusBadge(g.status)}</td>
+                    <td className="p-3 text-sm" title={g.nextSteps?.length ? `Still to do: ${g.nextSteps.join("; ")}` : undefined}>
+                      {g.onboarding ? (
+                        g.onboarding.complete ? (
+                          <Badge tone="green">Done</Badge>
+                        ) : (
+                          <span>
+                            {g.onboarding.done}/{g.onboarding.total}
+                            {g.nextSteps?.[0] && <span className="block text-xs text-muted">Next: {g.nextSteps[0]}</span>}
+                          </span>
+                        )
+                      ) : (
+                        "—"
+                      )}
+                      {g.source === "self_signup" && <span className="block text-xs text-muted">Self sign-up</span>}
+                    </td>
+                    <td className="p-3">
+                      {statusBadge(g.status)}
+                      {g.status === "grace" && g.graceEndsAt && <span className="block text-xs text-muted">until {formatDate(g.graceEndsAt)}</span>}
+                    </td>
                     <td className="p-3 text-right font-semibold">{formatPaise(g.mrrPaise)}</td>
                   </tr>
                 ))}

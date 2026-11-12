@@ -278,12 +278,19 @@ export interface AdminGymRow {
   packageName: string | null;
   payer: "franchisor" | "each_franchisee" | null;
   mrrPaise: number;
+  signedUpAt?: string;
+  source?: "self_signup" | "admin_created" | "seed";
+  graceEndsAt?: string | null;
+  onboarding?: { done: number; total: number; complete: boolean } | null;
+  nextSteps?: string[];
 }
 
 export interface AdminGymsKpis {
   clientGyms: number;
   branchesLive: number;
   onTrial: number;
+  selfSignups30d?: number;
+  setupIncomplete?: number;
   mrrPaise: number;
   overdue: number;
   overduePaise: number;
@@ -665,4 +672,59 @@ export interface PaymentAccountsOverview {
   canManageOrg: boolean;
   providers: PaymentProvider[];
   country: CountryCode;
+}
+
+// ---- Self-onboarding and Repflow billing ----
+
+export interface SignupPackage {
+  _id: string;
+  name: string;
+  description: string | null;
+  monthlyPricePaise: number;
+  yearlyPricePaise: number | null;
+  chargeUnit: ChargeUnit;
+  trialDays: number;
+  minBranches: number;
+  limits: Partial<PackageLimits>;
+  modules: Array<{ key: string; label: string }>;
+  /** Billing page only: why this package doesn't fit the gym (e.g. too many branches), or null. */
+  fitProblem?: string | null;
+}
+
+export interface OnboardingStep {
+  key: "locale" | "plans" | "payments" | "staff" | "members" | "checkin" | "subscribe";
+  label: string;
+  hint: string;
+  href: string;
+  done: boolean;
+  optional?: boolean;
+}
+
+export interface OnboardingState {
+  steps: OnboardingStep[];
+  progress: { done: number; total: number; complete: boolean };
+  dismissed: boolean;
+  status: OrgStatus;
+  trialEndsAt: string | null;
+  trialDaysLeft: number | null;
+  graceEndsAt: string | null;
+}
+
+export interface OwnerBilling {
+  org: { status: OrgStatus; trialEndsAt: string | null; graceEndsAt: string | null };
+  subscription: {
+    _id: string;
+    status: "trial" | "active" | "grace" | "suspended";
+    billingCycle: "monthly" | "yearly";
+    discountPct: number;
+    trialEndsAt: string | null;
+    currentPeriodEnd: string | null;
+    graceEndsAt: string | null;
+    package: SignupPackage | null;
+  } | null;
+  nextChargePaise: number | null;
+  currency: string;
+  branchCount: number;
+  invoices: Array<{ _id: string; periodStart: string; periodEnd: string; amountPaise: number; gstPaise: number; totalPaise: number; status: "pending" | "paid" | "failed" }>;
+  packages: SignupPackage[];
 }

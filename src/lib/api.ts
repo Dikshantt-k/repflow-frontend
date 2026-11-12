@@ -49,6 +49,9 @@ import type {
   PaymentAccount,
   PaymentAccountTarget,
   PaymentAccountsOverview,
+  SignupPackage,
+  OnboardingState,
+  OwnerBilling,
 } from "@/types/api";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
@@ -195,15 +198,21 @@ export interface SignupPayload {
   };
   branches: Array<{ name: string }>;
   plans: Array<{ name: string; lengthValue: number; lengthUnit: "month" | "day" | "session"; pricePaise: number; joiningFeePaise: number }>;
+  /** Self-onboarding: the Repflow package to trial (the server picks the best fit if omitted). */
+  packageId?: string;
+  billingCycle?: "monthly" | "yearly";
+  /** The owner's mobile, for setup and trial reminders on WhatsApp. */
+  ownerPhone?: string;
 }
 
 export const signupApi = {
   countries: () => request<{ countries: CountryOption[] }>("/signup/countries", { auth: false }),
+  packages: () => request<{ currency: string; packages: SignupPackage[] }>("/signup/packages", { auth: false }),
   complete: (payload: SignupPayload) =>
     request<{
       status: "ok";
       user: AuthUser;
-      org: { id: string; name: string };
+      org: { id: string; name: string; packageName?: string | null };
       branches: Array<{ id: string; name: string; code: string }>;
       accessToken: string;
       refreshToken: string;
@@ -398,6 +407,26 @@ export const paymentsApi = {
    */
   createRazorpayOrder: (amountPaise: number, target: { memberId?: string; branchId?: string }) =>
     request<GatewayOrder>("/payments/razorpay/order", { method: "POST", body: { amountPaise, ...target } }),
+};
+
+// ---- Self-onboarding checklist and the owner's Repflow billing ----
+
+export const onboardingApi = {
+  get: () => request<OnboardingState>("/onboarding"),
+  setDismissed: (dismissed: boolean) => request<OnboardingState>("/onboarding/dismiss", { method: "POST", body: { dismissed } }),
+};
+
+export const billingApi = {
+  get: () => request<OwnerBilling>("/billing"),
+  choosePackage: (packageId: string, billingCycle: "monthly" | "yearly") =>
+    request<OwnerBilling>("/billing/package", { method: "POST", body: { packageId, billingCycle } }),
+  startNow: () => request<OwnerBilling>("/billing/start-now", { method: "POST" }),
+  invoiceOrder: (invoiceId: string) =>
+    request<{ orderId: string; keyId: string; amountPaise: number; currency: string; provider: string }>(`/billing/invoices/${invoiceId}/order`, {
+      method: "POST",
+    }),
+  payInvoice: (invoiceId: string, proof: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string }) =>
+    request<{ invoice: { _id: string; status: string } }>(`/billing/invoices/${invoiceId}/pay`, { method: "POST", body: proof }),
 };
 
 // ---- Per-gym payment accounts ----

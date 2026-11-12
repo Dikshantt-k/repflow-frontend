@@ -12,7 +12,17 @@ export interface MeContext {
   role: Role;
   orgId?: string;
   branchId?: string;
-  org?: { name: string; city?: string; businessType: string; status: string; logoUrl?: string; modules: string[]; locale?: OrgLocale } | null;
+  org?: {
+    name: string;
+    city?: string;
+    businessType: string;
+    status: string;
+    trialEndsAt?: string;
+    graceEndsAt?: string;
+    logoUrl?: string;
+    modules: string[];
+    locale?: OrgLocale;
+  } | null;
   branch?: { name: string; code: string } | null;
 }
 
