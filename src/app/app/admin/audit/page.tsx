@@ -9,8 +9,11 @@ import type { AuditLogRow, Pagination } from "@/types/api";
 const PAGE_SIZE = 50;
 
 function actorLabel(actor: AuditLogRow["actorUserId"]): string {
+  // No actor: written by a scheduled job (billing, reminders). null: the user has since been deleted.
+  if (actor === undefined) return "System";
+  if (actor === null) return "Deleted user";
   if (typeof actor === "string") return actor;
-  return actor.name ?? actor.email;
+  return actor.name ?? actor.email ?? "Unknown user";
 }
 
 function orgLabel(orgId: AuditLogRow["orgId"]): string {

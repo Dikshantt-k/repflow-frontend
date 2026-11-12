@@ -469,8 +469,10 @@ export interface TrainerPtPackageRow {
 
 export interface AuditLogRow {
   _id: string;
-  orgId?: string | { _id: string; name: string };
-  actorUserId: string | { _id: string; name?: string; email: string };
+  /** null when the gym has been deleted; absent for platform-level entries */
+  orgId?: string | { _id: string; name: string } | null;
+  /** absent for entries written by scheduled jobs; null when the user has since been deleted */
+  actorUserId?: string | { _id: string; name?: string; email?: string } | null;
   action: string;
   targetType?: string;
   targetId?: string;
