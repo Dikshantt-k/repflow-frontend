@@ -8,6 +8,8 @@ const STAFF_CORE: Role[] = ["org_owner", "franchise_owner", "branch_manager", "f
 const MANAGERS: Role[] = ["org_owner", "franchise_owner", "branch_manager"];
 
 export const can = {
+  // attendance.ts — letting a blocked (expired / frozen / over dues limit) member in once
+  overrideCheckin: (r?: Role) => !!r && MANAGERS.includes(r),
   // members.ts
   createMember: (r?: Role) => !!r && STAFF_CORE.includes(r),
   importMembers: (r?: Role) => !!r && STAFF_CORE.includes(r),
@@ -37,7 +39,8 @@ export const can = {
   // members.ts (PT packages + fitness logs)
   sellPtPackage: (r?: Role) => !!r && STAFF_CORE.includes(r),
   managePtPackage: (r?: Role) => !!r && STAFF_CORE.includes(r),
-  logPtSession: (r?: Role) => !!r && (STAFF_CORE.includes(r) || r === "trainer"),
+  // The member's trainer logs sessions; managers may log on their behalf. Front desk can't (Round 2, #22).
+  logPtSession: (r?: Role) => !!r && (MANAGERS.includes(r) || r === "trainer"),
   logFitness: (r?: Role) => !!r && (STAFF_CORE.includes(r) || r === "trainer"),
   editDietPlan: (r?: Role) => !!r && (STAFF_CORE.includes(r) || r === "trainer"),
 

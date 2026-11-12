@@ -175,7 +175,13 @@ export interface Dues {
 }
 
 export type AttendanceMethod = "manual" | "biometric";
-export type AttendanceNote = "expired_allowed_once" | "dues_pending" | "personal_training" | "none";
+export type AttendanceNote =
+  | "expired_allowed_once"
+  | "frozen_allowed_once"
+  | "dues_allowed_once"
+  | "dues_pending"
+  | "personal_training"
+  | "none";
 
 export interface Attendance {
   _id: string;
