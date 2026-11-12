@@ -44,7 +44,7 @@ export default function MemberHomePage() {
                 {member.status === "expired" ? "Expired" : "Ends"} {formatDate(membership.endDate)}
               </p>
             </div>
-            {left !== null && <Badge tone={member.status === "expired" ? "orange" : "blue"}>{left >= 0 ? `${left}d left` : "Expired"}</Badge>}
+            {left !== null && <Badge tone={member.status === "expired" ? "orange" : "blue"}>{left > 0 ? `${left}d left` : left === 0 ? "Last day" : "Expired"}</Badge>}
           </div>
           <Link href="/member/renew">
             <Button variant="primary" className="w-full mt-1">

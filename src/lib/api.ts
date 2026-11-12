@@ -285,7 +285,8 @@ export const membersApi = {
   list: (params: ListMembersParams = {}) =>
     request<{ members: MemberListRow[]; pagination: Pagination }>("/members", { query: params as Record<string, string | number | undefined> }),
 
-  get: (id: string) => request<{ member: Member; memberships: Membership[]; payments: Payment[]; notes: Note[] }>(`/members/${id}`),
+  get: (id: string) =>
+    request<{ member: Member; memberships: Membership[]; payments: Payment[]; notes: Note[]; trainer?: { _id: string; name?: string } | null }>(`/members/${id}`),
 
   create: (input: CreateMemberInput) =>
     request<{ member: Member; membershipId: string; receiptNo: string; balancePaise: number; appliedToDuesPaise: number; tempPassword?: string }>(

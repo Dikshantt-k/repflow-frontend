@@ -31,9 +31,29 @@ export function formatDate(iso: string | Date, opts: Intl.DateTimeFormatOptions 
   return new Intl.DateTimeFormat(locale, { timeZone: isCalendarDate && !showsTime ? "UTC" : timeZone, ...opts }).format(date);
 }
 
+/**
+ * Whole calendar days from today (in the gym's time zone) to a plan's last valid day.
+ * 0 = the plan ends today (still valid all day); negative = it ended that many days ago.
+ * End dates are calendar dates stored as midnight UTC, so both sides are compared as dates.
+ */
 export function daysLeft(endDateIso: string): number {
-  const ms = new Date(endDateIso).getTime() - Date.now();
-  return Math.ceil(ms / (24 * 60 * 60 * 1000));
+  const end = new Date(endDateIso);
+  const endDay = Date.UTC(end.getUTCFullYear(), end.getUTCMonth(), end.getUTCDate());
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: orgLocale().timeZone, year: "numeric", month: "numeric", day: "numeric" })
+    .formatToParts(new Date())
+    .reduce<Record<string, number>>((acc, p) => (p.type === "literal" ? acc : { ...acc, [p.type]: Number(p.value) }), {});
+  const today = Date.UTC(parts.year, parts.month - 1, parts.day);
+  return Math.round((endDay - today) / 86_400_000);
+}
+
+/** "12 days left", "1 day left", "Last day today", "Expired yesterday", "Expired 3 days ago". */
+export function daysLeftLabel(endDateIso: string): string {
+  const n = daysLeft(endDateIso);
+  if (n > 1) return `${n} days left`;
+  if (n === 1) return "1 day left";
+  if (n === 0) return "Last day today";
+  if (n === -1) return "Expired yesterday";
+  return `Expired ${-n} days ago`;
 }
 
 export function initials(firstName: string, lastName?: string): string {
