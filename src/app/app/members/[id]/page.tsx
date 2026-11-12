@@ -288,7 +288,8 @@ function MemberDetailInner() {
                     <th className="text-left text-[13px] font-semibold text-muted p-2.5 bg-line2">Plan</th>
                     <th className="text-left text-[13px] font-semibold text-muted p-2.5 bg-line2">Start</th>
                     <th className="text-left text-[13px] font-semibold text-muted p-2.5 bg-line2">End</th>
-                    <th className="text-left text-[13px] font-semibold text-muted p-2.5 bg-line2">Paid</th>
+                    {/* Trainers never see prices; the API strips them too (Round 1, #1) */}
+                    {showFinancials && <th className="text-left text-[13px] font-semibold text-muted p-2.5 bg-line2">Paid</th>}
                     <th className="text-left text-[13px] font-semibold text-muted p-2.5 bg-line2">Status</th>
                   </tr>
                 </thead>
@@ -298,7 +299,7 @@ function MemberDetailInner() {
                       <td className="p-2.5">{m.planName}</td>
                       <td className="p-2.5">{formatDate(m.startDate)}</td>
                       <td className="p-2.5">{formatDate(m.endDate)}</td>
-                      <td className="p-2.5">{formatPaise(m.pricePaise)}</td>
+                      {showFinancials && <td className="p-2.5">{formatPaise(m.pricePaise ?? 0)}</td>}
                       <td className="p-2.5">{membershipStatusBadge(m.status)}</td>
                     </tr>
                   ))}

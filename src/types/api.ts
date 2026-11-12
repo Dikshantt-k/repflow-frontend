@@ -130,8 +130,10 @@ export interface Membership {
   planName: string;
   lengthValue: number;
   lengthUnit: PlanLengthUnit;
-  pricePaise: number;
-  joiningFeePaise: number;
+  /** Omitted by the API for trainers, who never see prices. */
+  pricePaise?: number;
+  /** Omitted by the API for trainers, who never see prices. */
+  joiningFeePaise?: number;
   startDate: string;
   endDate: string;
   status: MembershipStatus;
