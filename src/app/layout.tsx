@@ -1,4 +1,5 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { SITE } from "@/lib/site";
 import { Inter, Barlow_Condensed } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
@@ -17,9 +18,30 @@ const barlowCondensed = Barlow_Condensed({
 });
 
 export const metadata: Metadata = {
-  metadataBase: new URL("https://www.repflow360.in"),
-  title: "Repflow",
-  description: "Run your gym at full pace.",
+  metadataBase: new URL(SITE.url),
+  title: { default: `${SITE.name} – ${SITE.tagline}`, template: `%s | ${SITE.name}` },
+  description: SITE.description,
+  applicationName: SITE.name,
+  keywords: [...SITE.keywords],
+  creator: SITE.name,
+  publisher: SITE.name,
+  category: "business software",
+  formatDetection: { telephone: false },
+  openGraph: { type: "website", siteName: SITE.name, locale: "en_IN", url: "/" },
+  twitter: { card: "summary_large_image" },
+  robots: { index: true, follow: true, googleBot: { index: true, follow: true, "max-image-preview": "large", "max-snippet": -1 } },
+  // Paste the codes from Google Search Console / Bing Webmaster Tools into these env vars to verify the site.
+  verification: {
+    google: process.env.NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION || undefined,
+    other: process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION ? { "msvalidate.01": process.env.NEXT_PUBLIC_BING_SITE_VERIFICATION } : undefined,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0b1f1b" },
+  ],
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

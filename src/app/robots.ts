@@ -1,13 +1,15 @@
 import type { MetadataRoute } from "next";
+import { SITE } from "@/lib/site";
 
 export default function robots(): MetadataRoute.Robots {
   return {
     rules: {
       userAgent: "*",
       allow: "/",
-      // These trees require sign-in and have nothing worth indexing — keep crawlers off them.
-      disallow: ["/app/", "/member/"],
+      // Signed-in areas and one-time links have nothing worth indexing — keep crawlers off them.
+      disallow: ["/app/", "/member/", "/signup", "/accept-invite", "/set-password"],
     },
-    sitemap: "https://www.repflow360.in/sitemap.xml",
+    sitemap: `${SITE.url}/sitemap.xml`,
+    host: SITE.url,
   };
 }
