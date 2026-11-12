@@ -8,7 +8,7 @@ import { useAuth } from "@/lib/auth-context";
 import { collectUpiPayment, loadRazorpayScript } from "@/lib/razorpay";
 import { can } from "@/lib/permissions";
 import { hasModule } from "@/lib/modules";
-import { daysLeft, formatDate, formatPaise, initials, rupeesToPaise } from "@/lib/format";
+import { formatDate, formatPaise, initials, rupeesToPaise, daysLeftLabel } from "@/lib/format";
 import { currencySymbol, orgLocale } from "@/lib/locale";
 import { Avatar, Badge, Button, Card, Field, Input, Kpi, Modal, Pill, Select, Spinner, Toast, statusBadge } from "@/components/ui";
 import { ReceiptModal } from "@/components/ReceiptModal";
@@ -86,6 +86,7 @@ function MemberDetailInner() {
   const [ptPackages, setPtPackages] = useState<PTPackage[]>([]);
   const [fitnessLogs, setFitnessLogs] = useState<FitnessLog[]>([]);
   const [staff, setStaff] = useState<StaffRow[]>([]);
+  const [trainerName, setTrainerName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
 
@@ -111,6 +112,7 @@ function MemberDetailInner() {
       setMemberships(res.memberships);
       setPayments(res.payments);
       setNotes(res.notes);
+      setTrainerName(res.trainer?.name ?? null);
       const workoutRes = await membersApi.getWorkout(id);
       setWorkoutPlan(workoutRes.plan);
       const dietRes = await membersApi.getDiet(id);
@@ -132,9 +134,16 @@ function MemberDetailInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
+  // The staff list is only needed to reassign a trainer, and only managers may read it. Loading it for
+  // every role made trainers, front desk and accountants hit a refused request.
+  const canReassignTrainer = can.editMember(context?.role);
   useEffect(() => {
-    staffApi.list().then((res) => setStaff(res.staff));
-  }, []);
+    if (!canReassignTrainer) return;
+    staffApi
+      .list()
+      .then((res) => setStaff(res.staff))
+      .catch(() => setStaff([])); // the trainer's name still comes with the member
+  }, [canReassignTrainer]);
 
   async function reassignTrainer(trainerUserId: string) {
     try {
@@ -202,7 +211,7 @@ function MemberDetailInner() {
         <Kpi
           label="Plan ends"
           value={latestMembership ? formatDate(latestMembership.endDate) : "—"}
-          sub={latestMembership ? `${daysLeft(latestMembership.endDate)} days left` : undefined}
+          sub={latestMembership ? daysLeftLabel(latestMembership.endDate) : undefined}
         />
         {showFinancials && (
           <>
@@ -274,7 +283,7 @@ function MemberDetailInner() {
                     ))}
                   </Select>
                 ) : (
-                  (staff.find((s) => s.userId === member.trainerUserId)?.name ?? "—")
+                  (trainerName ?? staff.find((s) => s.userId === member.trainerUserId)?.name ?? "—")
                 )}
               </dd>
             </dl>
@@ -390,7 +399,7 @@ function MemberDetailInner() {
             onChanged={setPtPackages}
             canSell={can.sellPtPackage(context?.role)}
             canLog={can.logPtSession(context?.role)}
-            trainerName={staff.find((s) => s.userId === member.trainerUserId)?.name ?? staff.find((s) => s.userId === member.trainerUserId)?.email}
+            trainerName={trainerName ?? staff.find((s) => s.userId === member.trainerUserId)?.name ?? staff.find((s) => s.userId === member.trainerUserId)?.email}
             hasTrainer={!!member.trainerUserId}
           />
         </Card>
