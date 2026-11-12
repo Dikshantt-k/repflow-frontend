@@ -6,7 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { can } from "@/lib/permissions";
 import { Badge, Button, Card, EmptyState, Field, Input, Pill, Spinner } from "@/components/ui";
 import { formatPaise } from "@/lib/format";
-import { orgLocale } from "@/lib/locale";
+import { orgLocale, plusTaxSuffix } from "@/lib/locale";
 import { PlanDialog } from "@/components/PlanDialog";
 import type { Branch, Plan, PlanStatus } from "@/types/api";
 
@@ -117,7 +117,10 @@ export default function PlansPage() {
                 <tr key={plan._id} className="border-t border-line2">
                   <td className="p-3 font-semibold">{plan.name}</td>
                   <td className="p-3">{lengthLabel(plan)}</td>
-                  <td className="p-3">{formatPaise(plan.pricePaise)}</td>
+                  <td className="p-3">
+                    {formatPaise(plan.pricePaise)}
+                    {plusTaxSuffix() && <span className="block text-xs text-muted">{plusTaxSuffix().trim()}</span>}
+                  </td>
                   <td className="p-3">{plan.joiningFeePaise > 0 ? formatPaise(plan.joiningFeePaise) : "None"}</td>
                   <td className="p-3">
                     {plan.allBranches ? "All branches" : plan.branchIds.map((id) => branchNameById.get(id) ?? id).join(", ") || "—"}

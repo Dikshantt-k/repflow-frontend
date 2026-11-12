@@ -621,7 +621,7 @@ export interface BranchLocaleRow {
 
 export const orgLocaleApi = {
   get: () => request<{ locale: OrgLocale; branches: BranchLocaleRow[]; countries: CountryOption[] }>("/org/locale"),
-  update: (input: { country?: CountryCode; timeZone?: string; taxName?: string; taxRatePct?: number; taxId?: string }) =>
+  update: (input: { country?: CountryCode; timeZone?: string; taxName?: string; taxRatePct?: number; taxId?: string; taxInclusive?: boolean }) =>
     request<{ locale: OrgLocale }>("/org/locale", { method: "PATCH", body: input }),
   updateBranch: (id: string, input: { timeZone?: string | null; taxRatePct?: number | null }) =>
     request<{ branch: { _id: string; name: string; timeZone: string; tax: OrgLocale["tax"] } }>(`/org/locale/branches/${id}`, {

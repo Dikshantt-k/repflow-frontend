@@ -34,8 +34,8 @@ export function AccountStatusBanner() {
   } else if (org.status === "suspended") {
     tone = "warn";
     text = isOwner
-      ? "Your account is paused for an unpaid Repflow invoice. You can still see everything, but can't make changes until it's paid."
-      : "This gym's account is paused for an unpaid Repflow invoice. You can look things up, but changes are blocked until the owner pays.";
+      ? "Your account is paused for an unpaid Repflow invoice. Check-ins still work, but new members, renewals and payments are blocked until it's paid."
+      : "This gym's account is paused for an unpaid Repflow invoice. You can still check members in, but new members, renewals and payments are blocked until the owner pays.";
   }
   if (!tone) return null;
 

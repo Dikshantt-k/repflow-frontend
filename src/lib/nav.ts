@@ -34,7 +34,7 @@ function navFor(role: Role): NavItem[] {
     case "support":
       return ADMIN_NAV;
     case "trainer":
-      return [TRAINER_HOME, MEMBERS, ATTENDANCE, ROLES];
+      return [TRAINER_HOME, MEMBERS, PLANS, ATTENDANCE, ROLES]; // Round 5: list prices, read-only
     case "accountant":
       return [DASHBOARD, MEMBERS, PAYMENTS, EXPENSES, ATTENDANCE, ROLES];
     case "front_desk":
