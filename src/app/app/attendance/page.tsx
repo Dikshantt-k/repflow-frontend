@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ApiError, attendanceApi, branchesApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { can } from "@/lib/permissions";
 import { Avatar, Badge, Button, Card, EmptyState, Field, Input, Kpi, Select, Spinner, Toast } from "@/components/ui";
 import { formatDate, initials, formatPaise } from "@/lib/format";
 import type { Attendance, Branch, Member } from "@/types/api";
@@ -15,6 +16,8 @@ function memberLabel(m: PopulatedMember): string {
 
 const NOTE_BADGE: Record<string, { label: string; tone: "orange" | "gray" }> = {
   expired_allowed_once: { label: "Allowed (expired)", tone: "orange" },
+  frozen_allowed_once: { label: "Allowed (frozen)", tone: "orange" },
+  dues_allowed_once: { label: "Allowed (over dues limit)", tone: "orange" },
   dues_pending: { label: "Dues pending", tone: "orange" },
   personal_training: { label: "Personal training", tone: "gray" },
   none: { label: "—", tone: "gray" },
@@ -231,9 +234,14 @@ export default function AttendancePage() {
         {result?.kind === "expired" && (
           <div className="flex flex-wrap items-center gap-3 p-4 rounded-xl bg-warn-soft">
             <span className="font-semibold text-warn-ink flex-1 min-w-[200px]">{result.message}</span>
-            <Button variant="primary" disabled={checkingIn} onClick={() => doCheckin(true)}>
-              Allow once
-            </Button>
+            {/* Only managers can let a blocked member in, and it's audited (Round 2, #20) */}
+            {can.overrideCheckin(context?.role) ? (
+              <Button variant="primary" disabled={checkingIn} onClick={() => doCheckin(true)}>
+                Allow once
+              </Button>
+            ) : (
+              <span className="text-sm text-warn-ink">Ask a branch manager to let them in, or renew / collect dues first.</span>
+            )}
             <Button onClick={() => setResult(null)}>Cancel</Button>
           </div>
         )}
