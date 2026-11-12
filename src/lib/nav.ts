@@ -16,6 +16,7 @@ const EXPENSES: NavItem = { href: "/app/expenses", label: "Expenses", module: "e
 const ATTENDANCE: NavItem = { href: "/app/attendance", label: "Attendance" };
 const STAFF: NavItem = { href: "/app/staff", label: "Staff" };
 const ROLES: NavItem = { href: "/app/roles", label: "Roles & permissions" };
+const COUNTRY_SETTINGS: NavItem = { href: "/app/settings/country", label: "Country & tax" }; // Round 3
 const TRAINER_HOME: NavItem = { href: "/app/trainer", label: "My dashboard" };
 
 const ADMIN_NAV: NavItem[] = [
@@ -37,6 +38,7 @@ function navFor(role: Role): NavItem[] {
     case "front_desk":
       return [DASHBOARD, MEMBERS, LEADS, PAYMENTS, ATTENDANCE, ROLES];
     case "org_owner":
+      return [DASHBOARD, MEMBERS, PLANS, LEADS, PAYMENTS, EXPENSES, ATTENDANCE, STAFF, ROLES, COUNTRY_SETTINGS];
     case "franchise_owner":
     case "branch_manager":
       return [DASHBOARD, MEMBERS, PLANS, LEADS, PAYMENTS, EXPENSES, ATTENDANCE, STAFF, ROLES];

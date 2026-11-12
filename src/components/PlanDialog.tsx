@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { ApiError, plansApi, type PlanInput } from "@/lib/api";
 import { Modal, Button, Field, Input, Select, EmptyState } from "@/components/ui";
 import { formatPaise, rupeesToPaise } from "@/lib/format";
+import { currencySymbol, inclTaxLabel, orgLocale, taxSplitPreview } from "@/lib/locale";
 import type { Branch, Plan, PlanLengthUnit, PlanStatus } from "@/types/api";
 
 interface PlanDialogProps {
@@ -14,13 +15,11 @@ interface PlanDialogProps {
   initial?: Plan;
 }
 
-function gstPreview(pricePaise: number): { taxable: number; cgst: number; sgst: number } | null {
-  if (!pricePaise || pricePaise <= 0) return null;
-  const taxable = Math.round(pricePaise / 1.18);
-  const gst = pricePaise - taxable;
-  const cgst = Math.round(gst / 2);
-  const sgst = Math.round(gst / 2);
-  return { taxable, cgst, sgst };
+/** Taxable value + tax inside a tax-inclusive price, in the gym's tax (Round 3). Same rounding as the backend. */
+function taxPreview(pricePaise: number): { taxable: number; tax: number } | null {
+  if (!pricePaise || pricePaise <= 0 || orgLocale().tax.ratePct <= 0) return null;
+  const b = taxSplitPreview(pricePaise);
+  return { taxable: b.taxablePaise, tax: b.taxPaise };
 }
 
 export function PlanDialog({ open, onClose, onSaved, branches, initial }: PlanDialogProps) {
@@ -69,7 +68,7 @@ export function PlanDialog({ open, onClose, onSaved, branches, initial }: PlanDi
   }, [open, initial]);
 
   const pricePaisePreview = priceRupees.trim() ? rupeesToPaise(Number(priceRupees)) : 0;
-  const preview = gstPreview(pricePaisePreview);
+  const preview = taxPreview(pricePaisePreview);
 
   function toggleBranch(id: string) {
     setBranchIds((ids) => (ids.includes(id) ? ids.filter((x) => x !== id) : [...ids, id]));
@@ -83,7 +82,7 @@ export function PlanDialog({ open, onClose, onSaved, branches, initial }: PlanDi
     }
     const price = Number(priceRupees);
     if (!priceRupees.trim() || !(price > 0)) {
-      setError("Enter a price above ₹0.");
+      setError(`Enter a price above ${currencySymbol()}0.`);
       return;
     }
 
@@ -142,10 +141,10 @@ export function PlanDialog({ open, onClose, onSaved, branches, initial }: PlanDi
         </div>
 
         <Field
-          label="Price (incl. GST)"
-          hint={preview ? `Taxable ${formatPaise(preview.taxable)} + GST ${formatPaise(preview.cgst + preview.sgst)}` : undefined}
+          label={inclTaxLabel() ? `Price (${inclTaxLabel()})` : "Price"}
+          hint={preview ? `Taxable ${formatPaise(preview.taxable)} + ${orgLocale().tax.name} ${formatPaise(preview.tax)}` : undefined}
         >
-          <Input inputMode="decimal" value={priceRupees} onChange={(e) => setPriceRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder="₹" />
+          <Input inputMode="decimal" value={priceRupees} onChange={(e) => setPriceRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder={currencySymbol()} />
         </Field>
 
         <Field label="Joining fee">
@@ -153,7 +152,7 @@ export function PlanDialog({ open, onClose, onSaved, branches, initial }: PlanDi
             inputMode="decimal"
             value={joiningFeeRupees}
             onChange={(e) => setJoiningFeeRupees(e.target.value.replace(/[^\d.]/g, ""))}
-            placeholder="₹0"
+            placeholder={`${currencySymbol()}0`}
           />
         </Field>
 

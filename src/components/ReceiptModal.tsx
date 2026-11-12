@@ -5,13 +5,20 @@ import Link from "next/link";
 import { paymentsApi, ApiError } from "@/lib/api";
 import { formatPaise, formatDate } from "@/lib/format";
 import { downloadReceiptPdf } from "@/lib/receiptPdf";
+import { receiptTaxRows } from "@/lib/locale";
 import { Button, Modal, Spinner } from "@/components/ui";
 import type { Payment } from "@/types/api";
+
+/** "GSTIN 27AB…" / "TRN 1002…" / "VAT number GB…": the gym's tax registration on the receipt (Round 3). */
+export function taxIdLine(org: { gstin?: string; taxId?: string; taxIdLabel?: string }): string {
+  const id = org.taxId ?? org.gstin;
+  return id ? ` · ${org.taxIdLabel ?? "GSTIN"} ${id}` : "";
+}
 
 interface ReceiptData {
   payment: Payment;
   member: { _id: string; firstName: string; lastName?: string; phone: string; memberCode: string };
-  org: { name: string; gstin?: string };
+  org: { name: string; gstin?: string; taxId?: string; taxIdLabel?: string };
   branch: { name: string; address?: string };
 }
 
@@ -52,6 +59,10 @@ export function ReceiptModal({ paymentId, onClose }: { paymentId: string | null;
     }
   }
 
+  // Receipt amounts are shown in the currency the payment was taken in (Round 3).
+  const money = (paise: number) => formatPaise(paise, data?.payment.currency);
+  const taxRows = data ? receiptTaxRows(data.payment) : { taxablePaise: 0, lines: [], totalPaise: 0 };
+
   return (
     <Modal open={paymentId !== null} onClose={onClose} title="Receipt">
       {!data ? (
@@ -68,7 +79,7 @@ export function ReceiptModal({ paymentId, onClose }: { paymentId: string | null;
                 <span className="text-xs text-[#5A6067] leading-tight">
                   {data.branch.name}
                   {data.branch.address ? `, ${data.branch.address}` : ""}
-                  {data.org.gstin ? ` · GSTIN ${data.org.gstin}` : ""}
+                  {taxIdLine(data.org)}
                 </span>
               </div>
             </div>
@@ -108,40 +119,40 @@ export function ReceiptModal({ paymentId, onClose }: { paymentId: string | null;
               <tbody>
                 <tr>
                   <td className="py-1.5 border-b border-[#EEF0EC]">{data.payment.description}</td>
-                  <td className="py-1.5 border-b border-[#EEF0EC] text-right">{formatPaise(data.payment.totalPaise)}</td>
+                  <td className="py-1.5 border-b border-[#EEF0EC] text-right">{money(data.payment.totalPaise)}</td>
                 </tr>
               </tbody>
             </table>
 
             <div className="flex flex-col gap-0.5 text-sm text-[#5A6067]">
-              <div className="flex justify-between">
-                <span>Taxable value</span>
-                <span>{formatPaise(data.payment.gst.taxablePaise)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>CGST 9%</span>
-                <span>{formatPaise(data.payment.gst.cgstPaise)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span>SGST 9%</span>
-                <span>{formatPaise(data.payment.gst.sgstPaise)}</span>
-              </div>
+              {taxRows.lines.length > 0 && (
+                <div className="flex justify-between">
+                  <span>Taxable value</span>
+                  <span>{money(taxRows.taxablePaise)}</span>
+                </div>
+              )}
+              {taxRows.lines.map((l) => (
+                <div key={l.label} className="flex justify-between">
+                  <span>{l.label}</span>
+                  <span>{money(l.amountPaise)}</span>
+                </div>
+              ))}
             </div>
 
             <div className="flex justify-between items-baseline border-t-2 border-[#15171A] pt-2">
               <span className="font-semibold">Total</span>
-              <b className="font-display text-[28px]">{formatPaise(data.payment.gst.totalPaise)}</b>
+              <b className="font-display text-[28px]">{money(taxRows.totalPaise)}</b>
             </div>
 
             <div className="flex flex-col gap-0.5 text-sm">
               <div className="flex justify-between">
                 <span>Paid by {data.payment.mode.toUpperCase()}</span>
-                <span>{formatPaise(data.payment.amountPaidPaise)}</span>
+                <span>{money(data.payment.amountPaidPaise)}</span>
               </div>
               {data.payment.balancePaise > 0 && (
                 <div className="flex justify-between text-[#B4480F] font-semibold">
                   <span>Balance due</span>
-                  <span>{formatPaise(data.payment.balancePaise)}</span>
+                  <span>{money(data.payment.balancePaise)}</span>
                 </div>
               )}
             </div>

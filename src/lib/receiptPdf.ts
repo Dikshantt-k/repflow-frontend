@@ -1,11 +1,12 @@
 import { jsPDF } from "jspdf";
 import { formatDate, formatPaise } from "./format";
+import { receiptTaxRows } from "./locale";
 import type { Member, Payment } from "@/types/api";
 
 interface ReceiptPdfInput {
   payment: Payment;
   member: Pick<Member, "firstName" | "lastName" | "phone" | "memberCode">;
-  org: { name: string; gstin?: string };
+  org: { name: string; gstin?: string; taxId?: string; taxIdLabel?: string };
   branch: { name: string; address?: string };
 }
 
@@ -15,6 +16,8 @@ const WIDTH = 320;
 export function downloadReceiptPdf({ payment, member, org, branch }: ReceiptPdfInput): void {
   const doc = new jsPDF({ unit: "pt", format: [WIDTH, 560] });
   let y = MARGIN;
+  // Amounts in the currency the payment was taken in (Round 3).
+  const money = (paise: number) => formatPaise(paise, payment.currency);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
@@ -24,7 +27,8 @@ export function downloadReceiptPdf({ payment, member, org, branch }: ReceiptPdfI
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);
   doc.setTextColor(90, 96, 103);
-  const subLine = [branch.name, branch.address, org.gstin ? `GSTIN ${org.gstin}` : undefined].filter(Boolean).join(" · ");
+  const taxId = org.taxId ?? org.gstin;
+  const subLine = [branch.name, branch.address, taxId ? `${org.taxIdLabel ?? "GSTIN"} ${taxId}` : undefined].filter(Boolean).join(" · ");
   doc.text(doc.splitTextToSize(subLine, WIDTH - MARGIN * 2), MARGIN, y);
   y += 20;
 
@@ -61,18 +65,18 @@ export function downloadReceiptPdf({ payment, member, org, branch }: ReceiptPdfI
   doc.line(MARGIN, y, WIDTH - MARGIN, y);
   y += 16;
   doc.text(payment.description, MARGIN, y);
-  doc.text(formatPaise(payment.totalPaise), WIDTH - MARGIN, y, { align: "right" });
+  doc.text(money(payment.totalPaise), WIDTH - MARGIN, y, { align: "right" });
   y += 12;
   doc.line(MARGIN, y, WIDTH - MARGIN, y);
   y += 18;
 
   doc.setTextColor(90, 96, 103);
   doc.setFontSize(9.5);
-  const gstRows: Array<[string, string]> = [
-    ["Taxable value", formatPaise(payment.gst.taxablePaise)],
-    ["CGST 9%", formatPaise(payment.gst.cgstPaise)],
-    ["SGST 9%", formatPaise(payment.gst.sgstPaise)],
-  ];
+  // Tax lines for the gym's country: CGST/SGST, VAT, GST or sales tax (Round 3).
+  const tax = receiptTaxRows(payment);
+  const gstRows: Array<[string, string]> = tax.lines.length
+    ? [["Taxable value", money(tax.taxablePaise)], ...tax.lines.map((l): [string, string] => [l.label, money(l.amountPaise)])]
+    : [];
   for (const [label, value] of gstRows) {
     doc.text(label, MARGIN, y);
     doc.text(value, WIDTH - MARGIN, y, { align: "right" });
@@ -89,19 +93,19 @@ export function downloadReceiptPdf({ payment, member, org, branch }: ReceiptPdfI
   doc.setTextColor(21, 23, 26);
   doc.text("Total", MARGIN, y);
   doc.setFontSize(16);
-  doc.text(formatPaise(payment.gst.totalPaise), WIDTH - MARGIN, y, { align: "right" });
+  doc.text(money(tax.totalPaise), WIDTH - MARGIN, y, { align: "right" });
   y += 22;
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(10);
   doc.text(`Paid by ${payment.mode.toUpperCase()}`, MARGIN, y);
-  doc.text(formatPaise(payment.amountPaidPaise), WIDTH - MARGIN, y, { align: "right" });
+  doc.text(money(payment.amountPaidPaise), WIDTH - MARGIN, y, { align: "right" });
   y += 16;
   if (payment.balancePaise > 0) {
     doc.setTextColor(180, 72, 15);
     doc.setFont("helvetica", "bold");
     doc.text("Balance due", MARGIN, y);
-    doc.text(formatPaise(payment.balancePaise), WIDTH - MARGIN, y, { align: "right" });
+    doc.text(money(payment.balancePaise), WIDTH - MARGIN, y, { align: "right" });
     y += 16;
   }
   y += 10;

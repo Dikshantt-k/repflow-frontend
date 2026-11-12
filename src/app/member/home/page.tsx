@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { meApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { formatDate, daysLeft } from "@/lib/format";
+import { formatDate, daysLeft, formatPaise } from "@/lib/format";
 import { Badge, Button, Card, Spinner } from "@/components/ui";
 import type { MeMemberSummary } from "@/types/api";
 
@@ -66,7 +66,7 @@ export default function MemberHomePage() {
           <span className="text-sm text-muted">Visits this month</span>
         </Card>
         <Card className="items-center text-center gap-1 py-4">
-          <span className="font-display text-2xl font-semibold">{member.duesPaise > 0 ? "₹" + Math.round(member.duesPaise / 100) : "—"}</span>
+          <span className="font-display text-2xl font-semibold">{member.duesPaise > 0 ? formatPaise(member.duesPaise) : "—"}</span>
           <span className="text-sm text-muted">Dues</span>
         </Card>
       </div>

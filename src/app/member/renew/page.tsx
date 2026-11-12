@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { meApi, ApiError } from "@/lib/api";
 import { loadRazorpayScript, openRazorpayCheckout } from "@/lib/razorpay";
 import { formatPaise } from "@/lib/format";
+import { inclTaxLabel } from "@/lib/locale";
 import { Button, Card, Spinner } from "@/components/ui";
 import type { Plan } from "@/types/api";
 
@@ -117,8 +118,8 @@ export default function MemberRenewPage() {
           {plan && (
             <Card>
               <div className="flex justify-between">
-                <span className="text-muted">Total (incl. GST)</span>
-                <b className="font-display text-2xl">{formatPaise(plan.gst.totalPaise)}</b>
+                <span className="text-muted">{inclTaxLabel() ? `Total (${inclTaxLabel()})` : "Total"}</span>
+                <b className="font-display text-2xl">{formatPaise(plan.tax?.totalPaise ?? plan.gst?.totalPaise ?? plan.pricePaise)}</b>
               </div>
             </Card>
           )}

@@ -70,7 +70,9 @@ export interface Plan {
   branchIds: string[];
   onlineRenewal: boolean;
   status: PlanStatus;
-  gst: GstBreakdown;
+  /** India only */
+  gst?: GstBreakdown;
+  tax?: TaxBreakdown;
 }
 
 export type Gender = "prefer_not_to_say" | "female" | "male" | "other";
@@ -158,7 +160,12 @@ export interface Payment {
   balancePaise: number;
   mode: PaymentMode;
   gstInvoice: boolean;
-  gst: GstBreakdown;
+  /** India only; older payments always have it */
+  gst?: GstBreakdown;
+  /** Every payment from Round 3 on */
+  tax?: TaxBreakdown;
+  /** ISO 4217; amounts are in its minor unit */
+  currency?: string;
   date: string;
 }
 
@@ -572,3 +579,39 @@ export interface Network {
   companyBranches: NetworkBranch[];
   franchisees: Array<{ id: string; name: string; status: string; branches: NetworkBranch[] }>;
 }
+
+// ---- Round 3: country settings ----
+
+export type CountryCode = "IN" | "AE" | "GB" | "US" | "AU";
+
+export interface OrgLocale {
+  country: CountryCode;
+  currency: string;
+  locale: string;
+  timeZone: string;
+  tax: { name: string; ratePct: number; split?: "cgst_sgst" };
+  taxIdLabel: string;
+  taxId?: string;
+  gateway: "razorpay" | "stripe";
+  phone: { dialCode: string; example: string };
+}
+
+export interface TaxBreakdown {
+  name: string;
+  ratePct: number;
+  taxablePaise: number;
+  taxPaise: number;
+  lines: Array<{ label: string; ratePct: number; amountPaise: number }>;
+  totalPaise: number;
+}
+
+export interface CountryOption {
+  code: CountryCode;
+  name: string;
+  currency: string;
+  timeZones: string[];
+  tax: { name: string; ratePct: number; taxIdLabel: string };
+  phone: { dialCode: string; example: string };
+  gateway: "razorpay" | "stripe";
+}
+

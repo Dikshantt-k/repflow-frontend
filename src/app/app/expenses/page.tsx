@@ -5,6 +5,7 @@ import { branchesApi, expensesApi, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { can } from "@/lib/permissions";
 import { formatDate, formatPaise, rupeesToPaise } from "@/lib/format";
+import { currencySymbol } from "@/lib/locale";
 import { Button, Card, EmptyState, Field, Input, Kpi, Modal, Pill, Select, Spinner } from "@/components/ui";
 import type { Branch, Expense, ExpenseCategory } from "@/types/api";
 
@@ -212,7 +213,7 @@ function CreateExpenseModal({
       return;
     }
     if (!amountRupees.trim() || !(amount > 0)) {
-      setError("Enter an amount above ₹0.");
+      setError(`Enter an amount above ${currencySymbol()}0.`);
       return;
     }
     setBusy(true);
@@ -265,7 +266,7 @@ function CreateExpenseModal({
         <Input value={vendor} onChange={(e) => setVendor(e.target.value)} />
       </Field>
       <Field label="Amount">
-        <Input inputMode="decimal" value={amountRupees} onChange={(e) => setAmountRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder="₹" />
+        <Input inputMode="decimal" value={amountRupees} onChange={(e) => setAmountRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder={`${currencySymbol()}`} />
       </Field>
       <Field label="Date">
         <Input type="date" value={date} onChange={(e) => setDate(e.target.value)} />

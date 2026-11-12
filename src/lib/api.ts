@@ -42,6 +42,9 @@ import type {
   LeadSource,
   LeadStatus,
   TrainerPtPackageRow,
+  OrgLocale,
+  CountryOption,
+  CountryCode,
 } from "@/types/api";
 
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:4000/api";
@@ -158,7 +161,7 @@ export const authApi = {
         role: Role;
         orgId?: string;
         branchId?: string;
-        org?: { name: string; city?: string; businessType: string; status: string; logoUrl?: string; modules: string[] } | null;
+        org?: { name: string; city?: string; businessType: string; status: string; logoUrl?: string; modules: string[]; locale?: OrgLocale } | null;
         branch?: { name: string; code: string } | null;
       };
     }>("/auth/me"),
@@ -176,12 +179,22 @@ export const authApi = {
 
 export interface SignupPayload {
   sessionToken: string;
-  gym: { name: string; city?: string; gstin?: string; businessType: "independent" | "franchise" };
+  gym: {
+    name: string;
+    city?: string;
+    gstin?: string;
+    businessType: "independent" | "franchise";
+    /** Round 3: sets currency, tax, time zone and phone format. Defaults to India. */
+    country?: CountryCode;
+    timeZone?: string;
+    taxId?: string;
+  };
   branches: Array<{ name: string }>;
   plans: Array<{ name: string; lengthValue: number; lengthUnit: "month" | "day" | "session"; pricePaise: number; joiningFeePaise: number }>;
 }
 
 export const signupApi = {
+  countries: () => request<{ countries: CountryOption[] }>("/signup/countries", { auth: false }),
   complete: (payload: SignupPayload) =>
     request<{
       status: "ok";
@@ -533,3 +546,26 @@ export const trainerApi = {
 };
 
 export { tokenStore };
+
+// ---- Round 3: gym country settings (owner) ----
+
+export interface BranchLocaleRow {
+  _id: string;
+  name: string;
+  code: string;
+  timeZone: string;
+  tax: OrgLocale["tax"];
+  overrides: { timeZone: string | null; taxRatePct: number | null };
+}
+
+export const orgLocaleApi = {
+  get: () => request<{ locale: OrgLocale; branches: BranchLocaleRow[]; countries: CountryOption[] }>("/org/locale"),
+  update: (input: { country?: CountryCode; timeZone?: string; taxName?: string; taxRatePct?: number; taxId?: string }) =>
+    request<{ locale: OrgLocale }>("/org/locale", { method: "PATCH", body: input }),
+  updateBranch: (id: string, input: { timeZone?: string | null; taxRatePct?: number | null }) =>
+    request<{ branch: { _id: string; name: string; timeZone: string; tax: OrgLocale["tax"] } }>(`/org/locale/branches/${id}`, {
+      method: "PATCH",
+      body: input,
+    }),
+};
+
