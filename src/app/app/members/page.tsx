@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { membersApi, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -22,6 +23,18 @@ const STATUS_FILTERS: Array<{ value: StatusFilter; label: string }> = [
 ];
 
 const PAGE_SIZE = 25;
+
+/** Applies ?q= and ?status= (e.g. from the sidebar search or dashboard links) to the list filters. */
+function UrlFilters({ onSearch, onStatus }: { onSearch: (q: string) => void; onStatus: (s: StatusFilter) => void }) {
+  const params = useSearchParams();
+  useEffect(() => {
+    const q = params.get("q");
+    const st = params.get("status");
+    if (q !== null) onSearch(q);
+    if (st && STATUS_FILTERS.some((f) => f.value === st)) onStatus(st as StatusFilter);
+  }, [params, onSearch, onStatus]);
+  return null;
+}
 
 export default function MembersListPage() {
   const { context } = useAuth();
@@ -80,6 +93,9 @@ export default function MembersListPage() {
 
   return (
     <div className="flex flex-col gap-5">
+      <Suspense fallback={null}>
+        <UrlFilters onSearch={setSearchInput} onStatus={setStatus} />
+      </Suspense>
       <div className="flex flex-wrap justify-between items-end gap-4">
         <div>
           <h1 className="text-3xl">{pagination ? pagination.total : "…"} members in your branches</h1>

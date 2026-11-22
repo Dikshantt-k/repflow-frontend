@@ -56,6 +56,14 @@ export function daysLeftLabel(endDateIso: string): string {
   return `Expired ${-n} days ago`;
 }
 
+/** Calendar date (year, 1-based month, day) of an instant in the gym's time zone. */
+export function localDateParts(when: string | Date = new Date()): { year: number; month: number; day: number } {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: orgLocale().timeZone, year: "numeric", month: "numeric", day: "numeric" })
+    .formatToParts(new Date(when))
+    .reduce<Record<string, number>>((acc, p) => (p.type === "literal" ? acc : { ...acc, [p.type]: Number(p.value) }), {});
+  return { year: parts.year!, month: parts.month!, day: parts.day! };
+}
+
 export function initials(firstName: string, lastName?: string): string {
   return `${firstName[0] ?? ""}${lastName?.[0] ?? ""}`.toUpperCase();
 }

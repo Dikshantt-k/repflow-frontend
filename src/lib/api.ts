@@ -76,6 +76,13 @@ interface RequestOptions {
 
 let refreshPromise: Promise<boolean> | null = null;
 
+/** Fired on window when an authenticated request finds the session has expired. */
+export const SESSION_EXPIRED_EVENT = "repflow:session-expired";
+
+function notifySessionExpired() {
+  if (typeof window !== "undefined") window.dispatchEvent(new Event(SESSION_EXPIRED_EVENT));
+}
+
 async function doRefresh(): Promise<boolean> {
   const refreshToken = tokenStore.getRefreshToken();
   if (!refreshToken) return false;
@@ -120,6 +127,9 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     });
   }
 
+  // Only a request that was sent with a session can "expire" (not login/signup calls).
+  const hadSession = auth && Boolean(tokenStore.getAccessToken() || tokenStore.getRefreshToken());
+
   let res = await doFetch();
 
   if (res.status === 401 && auth && tokenStore.getRefreshToken()) {
@@ -128,6 +138,15 @@ async function request<T>(path: string, opts: RequestOptions = {}): Promise<T> {
     });
     const refreshed = await refreshPromise;
     if (refreshed) res = await doFetch();
+  }
+
+  if (res.status === 401 && hadSession) {
+    // The session is gone (refresh failed or no refresh token). Tell the AuthProvider so it can
+    // send the user to /login, and never settle this promise: the page is about to unmount, and
+    // throwing here would only surface as an unhandled "Sign in to continue." error overlay.
+    tokenStore.clear();
+    notifySessionExpired();
+    return new Promise<T>(() => {});
   }
 
   const json = await res.json().catch(() => undefined);

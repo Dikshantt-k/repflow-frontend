@@ -2,7 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
-import { authApi } from "./api";
+import { authApi, SESSION_EXPIRED_EVENT } from "./api";
 import { tokenStore } from "./tokenStore";
 import type { AuthUser, OrgLocale, Role } from "@/types/api";
 import { setOrgLocale } from "./locale";
@@ -78,6 +78,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setOrgLocale(null);
     setState({ user: null, context: null, loading: false });
     router.push("/login");
+  }, [router]);
+
+  // Any API call that finds the session expired lands here: drop the user and go to login.
+  useEffect(() => {
+    function onExpired() {
+      setOrgLocale(null);
+      setState({ user: null, context: null, loading: false });
+      router.replace("/login?expired=1");
+    }
+    window.addEventListener(SESSION_EXPIRED_EVENT, onExpired);
+    return () => window.removeEventListener(SESSION_EXPIRED_EVENT, onExpired);
   }, [router]);
 
   return (

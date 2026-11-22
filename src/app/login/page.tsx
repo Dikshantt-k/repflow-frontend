@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { authApi, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -18,6 +18,17 @@ const IDENTIFIER_TABS: Array<{ value: LoginIdentifierType; label: string; placeh
   { value: "email", label: "Email", placeholder: "you@example.com", type: "email", autoComplete: "email" },
   { value: "phone", label: "Mobile", placeholder: "98200 11234", type: "tel", autoComplete: "tel" },
 ];
+
+/** Shown when the app shell sent the user here because their session ran out (?expired=1). */
+function ExpiredNotice() {
+  const params = useSearchParams();
+  if (params.get("expired") !== "1") return null;
+  return (
+    <p role="status" className="text-sm font-medium rounded-[10px] bg-warn-soft text-warn-ink px-3 py-2.5">
+      Your session has expired. Sign in again to continue.
+    </p>
+  );
+}
 
 export default function LoginPage() {
   const router = useRouter();
@@ -99,6 +110,10 @@ export default function LoginPage() {
 
       <div className="hero-in w-full max-w-[440px] bg-surface border border-line rounded-2xl shadow-[0_20px_50px_rgba(10,20,18,0.12)] p-8 sm:p-10 flex flex-col gap-6">
         <Logo />
+
+        <Suspense fallback={null}>
+          <ExpiredNotice />
+        </Suspense>
 
         {step === "credentials" && (
           <div className="flex flex-col gap-5">

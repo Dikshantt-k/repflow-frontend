@@ -4,8 +4,10 @@ import { useEffect, useState } from "react";
 import { meApi, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { hasModule } from "@/lib/modules";
-import { formatDate, formatPaise, initials } from "@/lib/format";
-import { Avatar, Badge, Button, Card, Field, Modal, Select, Spinner } from "@/components/ui";
+import { daysLeftLabel, daysLeft, formatDate, formatPaise, initials } from "@/lib/format";
+import { Button, Field, Modal, Select, Toast, cx } from "@/components/ui";
+import { PageHeader, PageSpinner, ProgressBar, Tile, membershipRemainingPct } from "@/components/member-ui";
+import { IconReceipt } from "@/components/icons";
 import type { MeMemberSummary, Payment, PTPackage } from "@/types/api";
 
 const FREEZE_REASONS = [
@@ -14,6 +16,33 @@ const FREEZE_REASONS = [
   { value: "exams", label: "Exams" },
   { value: "other", label: "Other" },
 ] as const;
+
+function PtCard({ pkg }: { pkg: PTPackage }) {
+  const used = pkg.sessions.length;
+  const left = pkg.totalSessions - used;
+  return (
+    <Tile className="gap-3">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="font-sans text-lg font-bold">Personal training</h2>
+          <p className="text-sm text-muted">{pkg.name}</p>
+        </div>
+        <span className="px-2.5 py-1 rounded-full bg-accent-soft text-accent-ink text-xs font-semibold whitespace-nowrap">
+          {left} {left === 1 ? "session" : "sessions"} left
+        </span>
+      </div>
+      <div className="mt-auto flex items-baseline gap-2">
+        <span className="text-[34px] font-bold leading-none">{used}</span>
+        <span className="text-sm text-muted">of {pkg.totalSessions} sessions used</span>
+      </div>
+      <div className="flex gap-1" aria-hidden="true">
+        {Array.from({ length: Math.min(pkg.totalSessions, 40) }, (_, i) => (
+          <span key={i} className={cx("h-1.5 flex-1 rounded-full", i < used ? "bg-line" : "bg-accent")} />
+        ))}
+      </div>
+    </Tile>
+  );
+}
 
 export default function MemberProfilePage() {
   const { context } = useAuth();
@@ -53,75 +82,89 @@ export default function MemberProfilePage() {
     }
   }
 
-  if (!data) {
-    return (
-      <div className="flex justify-center py-16">
-        <Spinner />
-      </div>
-    );
-  }
+  if (!data) return <PageSpinner />;
 
   const { member, membership, branch } = data;
+  const activePt = (ptPackages ?? []).filter((p) => p.status === "active");
+  const remainingPct = membership ? membershipRemainingPct(membership.startDate, membership.endDate) : 0;
+  const ended = membership ? daysLeft(membership.endDate) < 0 : false;
 
   return (
-    <div className="flex flex-col gap-3.5">
-      <div className="flex items-center gap-3.5">
-        <Avatar size="xl" label={initials(member.firstName, member.lastName)} />
-        <div>
-          <h1 className="text-2xl">
+    <>
+      <PageHeader eyebrow={`Member since ${formatDate(member.createdAt, { month: "short", year: "numeric" })}`} title="Profile" />
+
+      <Tile className="flex-row items-center gap-4">
+        <span className="w-16 h-16 flex-none rounded-full bg-accent-soft text-accent-ink flex items-center justify-center text-xl font-bold">
+          {initials(member.firstName, member.lastName)}
+        </span>
+        <div className="min-w-0">
+          <h2 className="font-sans text-xl sm:text-2xl font-bold truncate">
             {member.firstName} {member.lastName}
-          </h1>
-          <p className="text-muted">{member.phone}</p>
+          </h2>
+          <p className="text-sm text-muted truncate">{[member.phone, branch?.name].filter(Boolean).join(" · ")}</p>
         </div>
+      </Tile>
+
+      <div className="grid gap-3 lg:grid-cols-2">
+        <Tile className="gap-3">
+          <h2 className="font-sans text-lg font-bold">Membership</h2>
+          <dl className="grid grid-cols-[88px_1fr] gap-y-2 text-sm">
+            <dt className="text-muted">Plan</dt>
+            <dd className="font-semibold">{membership?.planName ?? "—"}</dd>
+            <dt className="text-muted">{ended ? "Ended" : "Ends"}</dt>
+            <dd className="font-semibold">{membership ? formatDate(membership.endDate) : "—"}</dd>
+            <dt className="text-muted">Branch</dt>
+            <dd className="font-semibold">{branch?.name ?? "—"}</dd>
+          </dl>
+          {membership && (
+            <div className="flex flex-col gap-1.5 mt-1">
+              <ProgressBar pct={remainingPct} />
+              <span className={cx("text-xs", ended ? "text-warn" : "text-muted")}>{daysLeftLabel(membership.endDate)}</span>
+            </div>
+          )}
+          <button
+            type="button"
+            onClick={() => setFreezeOpen(true)}
+            className="mt-auto min-h-[44px] rounded-full border border-line font-semibold text-sm hover:border-ink transition"
+          >
+            Request a freeze
+          </button>
+        </Tile>
+
+        {ptEnabled && activePt.length > 0 ? (
+          <div className="flex flex-col gap-3">
+            {activePt.map((p) => (
+              <PtCard key={p._id} pkg={p} />
+            ))}
+          </div>
+        ) : null}
       </div>
 
-      <Card>
-        <dl className="grid grid-cols-[max-content_1fr] gap-x-4 gap-y-1.5 text-sm">
-          <dt className="text-muted">Plan</dt>
-          <dd>{membership?.planName ?? "—"}</dd>
-          <dt className="text-muted">Ends</dt>
-          <dd>{membership ? formatDate(membership.endDate) : "—"}</dd>
-          <dt className="text-muted">Branch</dt>
-          <dd>{branch?.name ?? "—"}</dd>
-        </dl>
-        <Button onClick={() => setFreezeOpen(true)}>Request a freeze</Button>
-      </Card>
-
-      {ptPackages && ptPackages.some((p) => p.status === "active") && (
-        <Card>
-          <h2 className="text-lg">Personal training</h2>
-          <ul className="flex flex-col">
-            {ptPackages
-              .filter((p) => p.status === "active")
-              .map((p) => (
-                <li key={p._id} className="flex justify-between items-center py-2 border-t border-line2 first:border-0 text-sm">
-                  <span>{p.name}</span>
-                  <Badge tone="blue">{p.totalSessions - p.sessions.length} sessions left</Badge>
-                </li>
-              ))}
-          </ul>
-        </Card>
-      )}
-
-      <Card>
-        <h2 className="text-lg">Receipts</h2>
-        {!payments || payments.length === 0 ? (
+      <Tile className="gap-2">
+        <h2 className="font-sans text-lg font-bold">Receipts</h2>
+        {!payments ? (
+          <p className="text-sm text-muted">Loading…</p>
+        ) : payments.length === 0 ? (
           <p className="text-sm text-muted">No payments yet.</p>
         ) : (
           <ul className="flex flex-col">
             {payments.map((p) => (
-              <li key={p._id} className="flex justify-between py-2 border-t border-line2 text-sm">
-                <span>
-                  {p.description}
-                  <br />
-                  <span className="text-muted">{formatDate(p.date)}</span>
+              <li key={p._id} className="flex items-center gap-3 py-3 border-t border-line first:border-0">
+                <span className="w-10 h-10 flex-none rounded-[12px] bg-bg text-muted flex items-center justify-center">
+                  <IconReceipt size={16} />
                 </span>
-                <span className="font-semibold">{formatPaise(p.amountPaidPaise)}</span>
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm truncate">{p.description}</div>
+                  <div className="text-xs text-muted">
+                    {formatDate(p.date)} · {p.receiptNo}
+                  </div>
+                </div>
+                <span className="font-bold whitespace-nowrap">{formatPaise(p.amountPaidPaise)}</span>
               </li>
             ))}
           </ul>
         )}
-      </Card>
+      </Tile>
 
       <Modal open={freezeOpen} onClose={() => setFreezeOpen(false)} title="Request a freeze">
         <Field label="Number of days">
@@ -148,7 +191,9 @@ export default function MemberProfilePage() {
         </Button>
       </Modal>
 
-      {toast && <div className="fixed left-1/2 bottom-24 -translate-x-1/2 bg-ink text-bg px-4 py-2 rounded-xl text-sm font-semibold">{toast}</div>}
-    </div>
+      <div className="[&>div]:bottom-24 md:[&>div]:bottom-6">
+        <Toast message={toast} />
+      </div>
+    </>
   );
 }

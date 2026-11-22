@@ -1,30 +1,34 @@
 import type { Role } from "@/types/api";
 import { hasModule, type ModuleKey } from "./modules";
 
+export type NavGroup = "Overview" | "Platform" | "People" | "Money" | "Settings";
+export const NAV_GROUP_ORDER: NavGroup[] = ["Overview", "Platform", "People", "Money", "Settings"];
+
 export interface NavItem {
   href: string;
   label: string;
+  group: NavGroup; // sidebar section heading
   module?: ModuleKey; // hidden entirely when the org's package doesn't include this
 }
 
-const DASHBOARD: NavItem = { href: "/app/dashboard", label: "Dashboard" };
-const MEMBERS: NavItem = { href: "/app/members", label: "Members" };
-const PLANS: NavItem = { href: "/app/plans", label: "Membership plans" };
-const LEADS: NavItem = { href: "/app/leads", label: "Leads & enquiries", module: "leads" };
-const PAYMENTS: NavItem = { href: "/app/payments", label: "Payments and dues" };
-const EXPENSES: NavItem = { href: "/app/expenses", label: "Expenses", module: "expenses" };
-const ATTENDANCE: NavItem = { href: "/app/attendance", label: "Attendance" };
-const STAFF: NavItem = { href: "/app/staff", label: "Staff" };
-const ROLES: NavItem = { href: "/app/roles", label: "Roles & permissions" };
-const COUNTRY_SETTINGS: NavItem = { href: "/app/settings/country", label: "Country & tax" }; // Round 3
-const PAYMENT_SETTINGS: NavItem = { href: "/app/settings/payments", label: "Payment accounts" }; // per-gym payments
-const BILLING: NavItem = { href: "/app/billing", label: "Billing & plan" }; // the owner's Repflow subscription
-const TRAINER_HOME: NavItem = { href: "/app/trainer", label: "My dashboard" };
+const DASHBOARD: NavItem = { href: "/app/dashboard", label: "Dashboard", group: "Overview" };
+const MEMBERS: NavItem = { href: "/app/members", label: "Members", group: "People" };
+const PLANS: NavItem = { href: "/app/plans", label: "Membership plans", group: "People" };
+const LEADS: NavItem = { href: "/app/leads", label: "Leads & enquiries", group: "People", module: "leads" };
+const PAYMENTS: NavItem = { href: "/app/payments", label: "Payments and dues", group: "Money" };
+const EXPENSES: NavItem = { href: "/app/expenses", label: "Expenses", group: "Money", module: "expenses" };
+const ATTENDANCE: NavItem = { href: "/app/attendance", label: "Attendance", group: "People" };
+const STAFF: NavItem = { href: "/app/staff", label: "Staff", group: "People" };
+const ROLES: NavItem = { href: "/app/roles", label: "Roles & permissions", group: "Settings" };
+const COUNTRY_SETTINGS: NavItem = { href: "/app/settings/country", label: "Country & tax", group: "Settings" }; // Round 3
+const PAYMENT_SETTINGS: NavItem = { href: "/app/settings/payments", label: "Payment accounts", group: "Money" }; // per-gym payments
+const BILLING: NavItem = { href: "/app/billing", label: "Billing & plan", group: "Money" }; // the owner's Repflow subscription
+const TRAINER_HOME: NavItem = { href: "/app/trainer", label: "My dashboard", group: "Overview" };
 
 const ADMIN_NAV: NavItem[] = [
-  { href: "/app/admin/gyms", label: "Gyms" },
-  { href: "/app/admin/packages", label: "Packages" },
-  { href: "/app/admin/audit", label: "Activity log" },
+  { href: "/app/admin/gyms", label: "Gyms", group: "Platform" },
+  { href: "/app/admin/packages", label: "Packages", group: "Platform" },
+  { href: "/app/admin/audit", label: "Activity log", group: "Settings" },
   ROLES,
 ];
 

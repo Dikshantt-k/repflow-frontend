@@ -1,9 +1,11 @@
+import Image from "next/image";
 import Link from "next/link";
 import type { CSSProperties } from "react";
 import type { Metadata } from "next";
 import { Button, Card } from "@/components/ui";
 import { Logo } from "@/components/Logo";
 import { Reveal } from "@/components/Reveal";
+import { RotatingWords } from "@/components/RotatingWords";
 import { ScrollProgress } from "@/components/ScrollProgress";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { JsonLd } from "@/components/JsonLd";
@@ -23,6 +25,8 @@ export const metadata: Metadata = {
   openGraph: { title: TITLE, description: DESCRIPTION, url: "/" },
   twitter: { title: TITLE, description: DESCRIPTION },
 };
+
+const HERO_AUDIENCES = ["Gym Owners", "Entrepreneurs", "Franchises", "Fitness Studios", "Multi-Branch Gyms"];
 
 const FEATURES = [
   {
@@ -133,47 +137,98 @@ export default function LandingPage() {
       <JsonLd data={STRUCTURED_DATA} />
       <ScrollProgress />
 
-      <header className="flex items-center justify-between px-6 py-5 max-w-[1100px] w-full mx-auto">
-        <Link href="/" aria-label={`${SITE.name} home`}>
-          <Logo />
-        </Link>
-        <nav className="flex items-center gap-4" aria-label="Main">
-          <Link href="/pricing" className="font-semibold text-muted hover:text-ink">
-            Pricing
-          </Link>
-          <ThemeToggle variant="light" />
-          <Link href="/login" className="font-semibold text-link">
-            Sign in
-          </Link>
-        </nav>
-      </header>
-
       <main className="flex-1">
-        <section className="px-6 py-16 md:py-24 max-w-[1100px] mx-auto flex flex-col items-start gap-5">
-          <span className="hero-in inline-flex items-center gap-2 text-xs font-semibold tracking-wide uppercase text-accent-ink bg-accent-soft rounded-full px-3 py-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-accent-pop" />
-            Gym management software &middot; Multi-branch &middot; Franchise-ready
-          </span>
-          <h1 className="hero-in text-4xl md:text-6xl max-w-3xl" style={{ "--d": "90ms" } as CSSProperties}>
-            Run your gym at full pace with {SITE.name}.
-          </h1>
-          <p className="hero-in text-lg text-muted max-w-2xl" style={{ "--d": "180ms" } as CSSProperties}>
-            Members, memberships, payments straight to your own account, GST and VAT receipts, attendance, staff and a member
-            app — one system for every branch of your gym.
-          </p>
-          <div className="hero-in flex flex-wrap items-center gap-4 mt-2" style={{ "--d": "270ms" } as CSSProperties}>
-            <Link href="/register">
-              <Button variant="primary" className="text-base px-6">
-                Start free trial
-              </Button>
-            </Link>
-            <Link href="/pricing" className="font-semibold text-link">
-              See pricing
-            </Link>
-            <span className="text-sm text-muted inline-flex items-center gap-1.5">
+        <section className="relative isolate min-h-[100svh] flex flex-col overflow-hidden bg-[#0b0f0e] text-white">
+          <Image src="/hero-gym.jpg" alt="" fill priority sizes="100vw" className="object-cover -z-20" />
+          <div aria-hidden className="absolute inset-0 -z-10 bg-gradient-to-b from-[#0a2a30]/75 via-[#0b1f24]/60 to-[#0a1a1f]/85" />
+
+          <header className="fixed top-0 inset-x-0 z-50 px-4 pt-3 md:px-8 md:pt-4">
+            <div className="flex items-center justify-between gap-4 max-w-[1100px] mx-auto rounded-2xl bg-[#1c7181]/55 shadow-lg shadow-black/10 backdrop-blur-xl backdrop-saturate-150 border border-white/25 px-4 py-2.5">
+              <Link href="/" aria-label={`${SITE.name} home`} className="inline-flex items-center gap-2.5">
+                <Logo size="sm" wordmark={false} />
+                <span className="font-display italic font-extrabold text-xl leading-none">Repflow</span>
+              </Link>
+              <nav className="flex items-center gap-2 sm:gap-5 text-sm" aria-label="Main">
+                <a href="#features-heading" className="hidden md:inline font-medium text-white/80 hover:text-white">
+                  Features
+                </a>
+                <a href="#how-heading" className="hidden md:inline font-medium text-white/80 hover:text-white">
+                  How it works
+                </a>
+                <Link href="/pricing" className="hidden sm:inline font-medium text-white/80 hover:text-white">
+                  Pricing
+                </Link>
+                <a href="#faq-heading" className="hidden md:inline font-medium text-white/80 hover:text-white">
+                  FAQ
+                </a>
+                <ThemeToggle variant="light" />
+                <Link href="/login" className="rounded-xl bg-white/10 hover:bg-white/20 px-3.5 py-2 font-semibold">
+                  Sign in
+                </Link>
+                <Link href="/register" className="rounded-xl bg-gradient-to-r from-[#2bb39a] to-[#049d98] hover:brightness-110 text-[#04201b] px-3.5 py-2 font-semibold">
+                  Start free
+                </Link>
+              </nav>
+            </div>
+          </header>
+
+          <div className="flex-1 flex flex-col items-center justify-center text-center gap-5 px-6 pt-32 pb-16 max-w-[820px] mx-auto w-full">
+            {/* <span className="hero-in inline-flex items-center gap-2 text-xs font-semibold rounded-md px-3 py-1.5 bg-accent-pop/20 text-accent-pop backdrop-blur-sm">
+              Try free for 14 days.
+            </span> */}
+            <h1 className="hero-in text-4xl sm:text-5xl md:text-7xl leading-[1.1]" style={{ "--d": "90ms" } as CSSProperties}>
+              The powerhouse platform
+              <br />
+              <span className="inline-flex items-baseline gap-3 whitespace-nowrap">
+                <span className="font-light text-white/80 shrink-0">for</span>
+                <RotatingWords words={HERO_AUDIENCES} variant="fade-blur" />
+              </span>
+            </h1>
+            <p className="hero-in text-base md:text-lg text-white/80 max-w-xl" style={{ "--d": "180ms" } as CSSProperties}>
+              {/* Members, memberships, payments straight to your own account, GST and VAT receipts, attendance, staff and a member
+              app &mdash; one system for every branch of your gym. */}
+              RepFlow is the best gym management software for growing businesses.
+            </p>
+            <form
+              action="/register"
+              method="get"
+              className="hero-in mt-2 flex w-full max-w-md items-center gap-2 rounded-full bg-black/40 backdrop-blur-md border border-white/15 p-1.5 pl-5"
+              style={{ "--d": "270ms" } as CSSProperties}
+            >
+              <label htmlFor="hero-email" className="sr-only">
+                Email address
+              </label>
+              <input
+                id="hero-email"
+                suppressHydrationWarning
+                name="email"
+                type="email"
+                placeholder="Enter your e-mail"
+                className="flex-1 min-w-0 bg-transparent text-sm text-white placeholder:text-white/60 outline-none"
+              />
+              <button
+                type="submit"
+                className="rounded-full bg-gradient-to-r from-[#2bb39a] to-[#049d98] hover:brightness-110 text-[#04201b] font-semibold text-sm px-5 min-h-[44px] whitespace-nowrap transition active:scale-[0.97]"
+              >
+                Start free
+              </button>
+            </form>
+            <p className="hero-in text-sm text-white/70 inline-flex items-center gap-1.5" style={{ "--d": "330ms" } as CSSProperties}>
               <span className="w-1.5 h-1.5 rounded-full bg-accent-pop" />
-              14-day free trial. No card required.
-            </span>
+              No card required &middot; Multi-branch &amp; franchise-ready
+            </p>
+          </div>
+
+          <div className="px-4 pb-5 md:pb-8 w-full">
+            <div className="flex items-center justify-between gap-4 max-w-md mx-auto rounded-2xl bg-black/45 backdrop-blur-md border border-white/10 px-5 py-3">
+              <div className="text-left">
+                <p className="font-semibold text-sm">14 days free</p>
+                <p className="text-xs text-white/70">Start your trial</p>
+              </div>
+              <Link href="/register" className="rounded-full bg-gradient-to-r from-[#2bb39a] to-[#049d98] hover:brightness-110 text-[#04201b] font-semibold text-xs px-4 py-2.5">
+                Get started
+              </Link>
+            </div>
           </div>
         </section>
 
@@ -193,8 +248,8 @@ export default function LandingPage() {
           </div>
         </section>
 
-        <section className="px-6 py-16 max-w-[1100px] mx-auto">
-          <h2 className="text-2xl mb-6">How it works</h2>
+        <section className="px-6 py-16 max-w-[1100px] mx-auto" aria-labelledby="how-heading">
+          <h2 id="how-heading" className="text-2xl mb-6">How it works</h2>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {STEPS.map((s, i) => (
               <Reveal key={s.n} delay={i * 100}>
