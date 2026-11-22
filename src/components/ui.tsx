@@ -14,7 +14,7 @@ interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
 
 export function Button({ variant = "default", className, ...props }: ButtonProps) {
   const base =
-    "inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-[10px] font-semibold text-sm whitespace-nowrap transition disabled:opacity-50 disabled:cursor-not-allowed";
+    "inline-flex items-center justify-center gap-2 min-h-[44px] px-4 rounded-[10px] font-semibold text-sm whitespace-nowrap transition active:scale-[0.97] disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100";
   const variants: Record<string, string> = {
     default: "border border-line bg-surface text-ink hover:border-muted",
     primary: "bg-accent border border-accent text-on-accent hover:bg-accent-hover",

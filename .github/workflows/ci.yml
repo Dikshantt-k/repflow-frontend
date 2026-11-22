@@ -1,0 +1,39 @@
+# Runs on every pull request and every push to main. A red check means don't merge.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  frontend:
+    name: Build (includes type-check)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      NEXT_TELEMETRY_DISABLED: 1
+      NEXT_PUBLIC_API_URL: http://localhost:4000/api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # next build type-checks every page and fails on type errors.
+      - name: Production build
+        run: npm run build
+
+      # Reported but doesn't block yet: existing lint warnings need a cleanup pass first.
+      - name: Lint (non-blocking)
+        run: npm run lint
+        continue-on-error: true

@@ -1,11 +1,18 @@
 "use client";
 
-import { Suspense, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { ApiError, signupApi } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Button, Field, Input, Select } from "@/components/ui";
 import { rupeesToPaise } from "@/lib/format";
+import { formatPaise } from "@/lib/format";
+import type { CountryCode, CountryOption, SignupPackage } from "@/types/api";
+
+/** Currency symbol for a country's currency before the gym exists (e.g. "£" for GBP). */
+function symbolFor(currency: string): string {
+  return new Intl.NumberFormat("en", { style: "currency", currency }).formatToParts(0).find((p) => p.type === "currency")?.value ?? currency;
+}
 
 interface PlanDraft {
   name: string;
@@ -22,7 +29,17 @@ const DEFAULT_PLANS: PlanDraft[] = [
   { name: "Yearly", lengthValue: 12, lengthUnit: "month", priceRupees: "", joiningFeeRupees: "" },
 ];
 
-const STEPS = ["Gym details", "Branches", "Membership plans", "Ready"];
+const STEPS = ["Gym details", "Branches", "Membership plans", "Repflow plan", "Ready"];
+
+/** Same rule as the server: does this package fit a gym with this many branches? */
+function fitProblem(p: SignupPackage, branchCount: number, businessType: string): string | null {
+  const max = p.limits.maxBranches ?? null;
+  if (max !== null && branchCount > max) return `Covers up to ${max} branch${max === 1 ? "" : "es"}`;
+  if (branchCount < p.minBranches && !(businessType === "franchise" && p.modules.some((m) => m.key === "franchise_network"))) {
+    return `Starts at ${p.minBranches} branches`;
+  }
+  return null;
+}
 
 function SignupWizard() {
   const router = useRouter();
@@ -35,7 +52,31 @@ function SignupWizard() {
 
   const [gymName, setGymName] = useState("");
   const [city, setCity] = useState("");
-  const [gstin, setGstin] = useState("");
+  const [gstin, setGstin] = useState(""); // the tax ID, labelled per country (GSTIN, TRN, VAT number, EIN, ABN)
+  // Round 3: country sets currency, tax, time zone and phone format for the whole gym.
+  const [countries, setCountries] = useState<CountryOption[]>([]);
+  const [countryCode, setCountryCode] = useState<CountryCode>("IN");
+  const [timeZone, setTimeZone] = useState("");
+  const country = countries.find((c) => c.code === countryCode);
+  const symbol = symbolFor(country?.currency ?? "INR");
+  const taxLabel = country && country.tax.ratePct > 0 ? `incl. ${country.tax.name}` : country ? "" : "incl. GST";
+
+  // Self-onboarding: the Repflow package to trial, and the owner's mobile for reminders.
+  const [packages, setPackages] = useState<SignupPackage[]>([]);
+  const [packageId, setPackageId] = useState<string | null>(null);
+  const [billingCycle, setBillingCycle] = useState<"monthly" | "yearly">("monthly");
+  const [ownerPhone, setOwnerPhone] = useState("");
+
+  useEffect(() => {
+    signupApi
+      .countries()
+      .then((r) => setCountries(r.countries))
+      .catch(() => setCountries([])); // falls back to India, as before
+    signupApi
+      .packages()
+      .then((r) => setPackages(r.packages))
+      .catch(() => setPackages([])); // the server then picks the best fit
+  }, []);
   const [businessType, setBusinessType] = useState<"independent" | "franchise">("independent");
   const [branches, setBranches] = useState<string[]>(["Main branch"]);
   const [branchDraft, setBranchDraft] = useState("");
@@ -55,6 +96,12 @@ function SignupWizard() {
     setBranches((b) => b.filter((_, idx) => idx !== i));
   }
 
+  const fitting = packages.filter((p) => !fitProblem(p, branches.length, businessType));
+  // Default: the cheapest package that fits (franchise brands: the cheapest with franchise tools), as the server does.
+  const suggested =
+    (businessType === "franchise" ? fitting.find((p) => p.modules.some((m) => m.key === "franchise_network")) : undefined) ?? fitting[0] ?? null;
+  const chosenPackage = packages.find((p) => p._id === packageId && !fitProblem(p, branches.length, businessType)) ?? suggested;
+
   async function submit() {
     setError(null);
     setBusy(true);
@@ -64,8 +111,20 @@ function SignupWizard() {
 
       const res = await signupApi.complete({
         sessionToken,
-        gym: { name: gymName, city: city || undefined, gstin: gstin || undefined, businessType },
+        gym: {
+          name: gymName,
+          city: city || undefined,
+          // India keeps sending gstin (older backends read it); every country sends taxId.
+          gstin: countryCode === "IN" ? gstin || undefined : undefined,
+          taxId: gstin || undefined,
+          businessType,
+          country: countryCode,
+          timeZone: timeZone || undefined,
+        },
         branches: branches.map((b) => ({ name: b })),
+        packageId: chosenPackage?._id,
+        billingCycle,
+        ownerPhone: ownerPhone.trim() || undefined,
         plans: validPlans.map((p) => ({
           name: p.name,
           lengthValue: p.lengthValue,
@@ -135,15 +194,58 @@ function SignupWizard() {
                 <Field label="City">
                   <Input value={city} onChange={(e) => setCity(e.target.value)} />
                 </Field>
-                <Field label="GSTIN (optional)">
+                <Field label={`${country?.tax.taxIdLabel ?? "GSTIN"} (optional)`}>
                   <Input value={gstin} onChange={(e) => setGstin(e.target.value)} />
                 </Field>
               </div>
+              {countries.length > 0 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <Field label="Country" hint={country ? `${country.currency} · ${country.tax.name} ${country.tax.ratePct}% · ${country.phone.dialCode}` : undefined}>
+                    <Select
+                      value={countryCode}
+                      onChange={(e) => {
+                        setCountryCode(e.target.value as CountryCode);
+                        setTimeZone("");
+                      }}
+                    >
+                      {countries.map((c) => (
+                        <option key={c.code} value={c.code}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </Select>
+                  </Field>
+                  {country && country.timeZones.length > 1 && (
+                    <Field label="Time zone">
+                      <Select value={timeZone || country.timeZones[0]} onChange={(e) => setTimeZone(e.target.value)}>
+                        {country.timeZones.map((tz) => (
+                          <option key={tz} value={tz}>
+                            {tz.split("/").pop()!.replace(/_/g, " ")}
+                          </option>
+                        ))}
+                      </Select>
+                    </Field>
+                  )}
+                </div>
+              )}
+              {countryCode === "US" && (
+                <p className="text-sm text-muted">Sales tax starts at 0%. Set your state&apos;s rate later in Settings if gym memberships are taxed where you are.</p>
+              )}
               <Field label="Business type">
                 <Select value={businessType} onChange={(e) => setBusinessType(e.target.value as "independent" | "franchise")}>
                   <option value="independent">Independent gym</option>
                   <option value="franchise">Franchise brand</option>
                 </Select>
+              </Field>
+              <Field label="Your mobile (optional)" hint="For setup tips and trial reminders on WhatsApp.">
+                <Input
+                  type="tel"
+                  inputMode="tel"
+                  autoComplete="tel"
+                  placeholder={country ? `${country.phone.dialCode} ${country.phone.example}` : "98200 11234"}
+                  value={ownerPhone}
+                  onChange={(e) => setOwnerPhone(e.target.value)}
+                />
               </Field>
             </>
           )}
@@ -181,10 +283,10 @@ function SignupWizard() {
                   <Field label="Plan name">
                     <Input value={p.name} onChange={(e) => updatePlan(i, { name: e.target.value })} className="w-40" />
                   </Field>
-                  <Field label="Price (incl. GST)">
+                  <Field label={taxLabel ? `Price (${taxLabel})` : "Price"}>
                     <Input
                       inputMode="decimal"
-                      placeholder="₹"
+                      placeholder={symbol}
                       value={p.priceRupees}
                       onChange={(e) => updatePlan(i, { priceRupees: e.target.value.replace(/[^\d.]/g, "") })}
                       className="w-32"
@@ -193,7 +295,7 @@ function SignupWizard() {
                   <Field label="Joining fee">
                     <Input
                       inputMode="decimal"
-                      placeholder="₹0"
+                      placeholder={`${symbol}0`}
                       value={p.joiningFeeRupees}
                       onChange={(e) => updatePlan(i, { joiningFeeRupees: e.target.value.replace(/[^\d.]/g, "") })}
                       className="w-28"
@@ -206,6 +308,63 @@ function SignupWizard() {
 
           {step === 3 && (
             <>
+              <h2 className="text-2xl">Pick your Repflow plan</h2>
+              <p className="text-sm text-muted">
+                Try it free{chosenPackage ? ` for ${chosenPackage.trialDays} days` : ""}. No card needed. You can switch plans any time from Billing.
+              </p>
+              {packages.length === 0 ? (
+                <p className="text-sm">We&apos;ll start you on the plan that fits your gym. You can change it later.</p>
+              ) : (
+                <>
+                  <div className="flex gap-1 rounded-[10px] border border-line p-1 self-start" role="group" aria-label="Billing cycle">
+                    {(["monthly", "yearly"] as const).map((c) => (
+                      <button
+                        key={c}
+                        type="button"
+                        className={`min-h-[36px] px-3 rounded-lg text-sm font-semibold ${billingCycle === c ? "bg-accent text-on-accent" : "text-muted"}`}
+                        onClick={() => setBillingCycle(c)}
+                      >
+                        {c === "monthly" ? "Monthly" : "Yearly"}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    {packages.map((p) => {
+                      const problem = fitProblem(p, branches.length, businessType);
+                      const price = billingCycle === "yearly" ? (p.yearlyPricePaise ?? p.monthlyPricePaise * 12) : p.monthlyPricePaise;
+                      const selected = chosenPackage?._id === p._id;
+                      return (
+                        <label
+                          key={p._id}
+                          className={`flex items-start gap-3 p-3.5 rounded-xl border ${problem ? "opacity-60" : ""} ${selected ? "border-accent bg-accent-soft" : "border-line"}`}
+                        >
+                          <input type="radio" disabled={!!problem} checked={selected} onChange={() => setPackageId(p._id)} className="mt-1" />
+                          <span className="flex-1">
+                            <span className="flex justify-between gap-2">
+                              <b>
+                                {p.name}
+                                {suggested?._id === p._id && <span className="ml-2 text-xs font-semibold text-accent">Suggested</span>}
+                              </b>
+                              <span className="text-sm">
+                                <b>{formatPaise(price, "INR")}</b> {p.chargeUnit === "branch" ? "per branch" : ""} / {billingCycle === "yearly" ? "year" : "month"}
+                              </span>
+                            </span>
+                            {p.description && <span className="block text-sm text-muted">{p.description}</span>}
+                            <span className="block text-xs text-muted mt-1">{p.modules.map((m) => m.label).join(" · ")}</span>
+                            {problem && <span className="block text-sm text-warn-ink mt-1">{problem}</span>}
+                          </span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                  {countryCode !== "IN" && <p className="text-xs text-muted">Repflow plans are billed in Indian rupees (INR) for now.</p>}
+                </>
+              )}
+            </>
+          )}
+
+          {step === 4 && (
+            <>
               <h2 className="text-2xl">Ready to go</h2>
               <ul className="flex flex-col gap-2">
                 <li>✓ {gymName || "Your gym"} in {city || "your city"}</li>
@@ -213,8 +372,11 @@ function SignupWizard() {
                   ✓ {branches.length} branch{branches.length === 1 ? "" : "es"}
                 </li>
                 <li>✓ {plans.filter((p) => p.priceRupees.trim()).length} membership plan(s) priced</li>
+                {chosenPackage && <li>✓ {chosenPackage.name} plan, free for {chosenPackage.trialDays} days</li>}
               </ul>
-              <p className="text-sm text-muted">You get a 14-day free trial. No card needed to start.</p>
+              <p className="text-sm text-muted">
+                Next, your dashboard shows a short checklist: connect your payment account, add members and invite your staff.
+              </p>
             </>
           )}
 

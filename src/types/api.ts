@@ -30,9 +30,13 @@ export interface ContextOption {
 export interface AuthUser {
   id: string;
   name?: string;
-  email: string;
+  email?: string;
+  phone?: string;
   themePreference?: "light" | "dark";
+  mustChangePassword?: boolean;
 }
+
+export type LoginIdentifierType = "member_code" | "email" | "phone";
 
 export interface GstBreakdown {
   taxablePaise: number;
@@ -66,7 +70,14 @@ export interface Plan {
   branchIds: string[];
   onlineRenewal: boolean;
   status: PlanStatus;
-  gst: GstBreakdown;
+  /** India only */
+  gst?: GstBreakdown;
+  tax?: TaxBreakdown;
+  /** Round 5: what a member is charged (price + tax when the gym's prices are before tax). */
+  chargePaise?: number;
+  taxInclusive?: boolean;
+  /** Member app only: memberships first, personal training / class packs in their own section. */
+  kind?: "membership" | "sessions";
 }
 
 export type Gender = "prefer_not_to_say" | "female" | "male" | "other";
@@ -83,7 +94,7 @@ export interface MemberListRow {
   branchName?: string;
   plan: { name: string; endDate: string } | null;
   status: MemberStatus;
-  duesPaise: number;
+  duesPaise?: number; // omitted for trainers — finance-visible-only info
 }
 
 export interface Member {
@@ -103,7 +114,7 @@ export interface Member {
   trainerUserId?: string;
   fingerprintEnrolled: boolean;
   status: MemberStatus;
-  duesPaise: number;
+  duesPaise?: number; // omitted for trainers — finance-visible-only info
   createdAt: string;
 }
 
@@ -126,8 +137,10 @@ export interface Membership {
   planName: string;
   lengthValue: number;
   lengthUnit: PlanLengthUnit;
-  pricePaise: number;
-  joiningFeePaise: number;
+  /** Omitted by the API for trainers, who never see prices. */
+  pricePaise?: number;
+  /** Omitted by the API for trainers, who never see prices. */
+  joiningFeePaise?: number;
   startDate: string;
   endDate: string;
   status: MembershipStatus;
@@ -152,7 +165,12 @@ export interface Payment {
   balancePaise: number;
   mode: PaymentMode;
   gstInvoice: boolean;
-  gst: GstBreakdown;
+  /** India only; older payments always have it */
+  gst?: GstBreakdown;
+  /** Every payment from Round 3 on */
+  tax?: TaxBreakdown;
+  /** ISO 4217; amounts are in its minor unit */
+  currency?: string;
   date: string;
 }
 
@@ -169,7 +187,13 @@ export interface Dues {
 }
 
 export type AttendanceMethod = "manual" | "biometric";
-export type AttendanceNote = "expired_allowed_once" | "dues_pending" | "personal_training" | "none";
+export type AttendanceNote =
+  | "expired_allowed_once"
+  | "frozen_allowed_once"
+  | "dues_allowed_once"
+  | "dues_pending"
+  | "personal_training"
+  | "none";
 
 export interface Attendance {
   _id: string;
@@ -259,12 +283,19 @@ export interface AdminGymRow {
   packageName: string | null;
   payer: "franchisor" | "each_franchisee" | null;
   mrrPaise: number;
+  signedUpAt?: string;
+  source?: "self_signup" | "admin_created" | "seed";
+  graceEndsAt?: string | null;
+  onboarding?: { done: number; total: number; complete: boolean } | null;
+  nextSteps?: string[];
 }
 
 export interface AdminGymsKpis {
   clientGyms: number;
   branchesLive: number;
   onTrial: number;
+  selfSignups30d?: number;
+  setupIncomplete?: number;
   mrrPaise: number;
   overdue: number;
   overduePaise: number;
@@ -308,9 +339,164 @@ export interface WorkoutPlan {
   memberId: string;
   trainerUserId?: string;
   days: WorkoutDay[];
-  dietNotes?: string;
   createdAt: string;
   updatedAt: string;
+}
+
+// ---- Diet plans ----
+
+export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
+
+export interface FoodItem {
+  name: string;
+  quantity?: string;
+  calories?: number;
+}
+
+export interface Meal {
+  type: MealType;
+  items: FoodItem[];
+}
+
+export interface DietDay {
+  weekday: Weekday;
+  meals: Meal[];
+}
+
+export interface DietPlan {
+  _id: string;
+  orgId: string;
+  branchId: string;
+  memberId: string;
+  trainerUserId?: string;
+  days: DietDay[];
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ---- Personal training ----
+
+export type PTPackageStatus = "active" | "completed" | "cancelled";
+
+export interface PTSession {
+  _id: string;
+  date: string;
+  trainerUserId: string;
+  notes?: string;
+}
+
+export interface PTPackage {
+  _id: string;
+  orgId: string;
+  branchId: string;
+  memberId: string;
+  trainerUserId?: string;
+  name: string;
+  totalSessions: number;
+  pricePaise?: number;
+  startDate: string;
+  expiresAt?: string;
+  status: PTPackageStatus;
+  sessions: PTSession[];
+  createdAt: string;
+}
+
+// ---- Fitness progress ----
+
+export interface FitnessMeasurements {
+  chestCm?: number;
+  waistCm?: number;
+  hipsCm?: number;
+  armsCm?: number;
+  thighsCm?: number;
+}
+
+export interface FitnessLog {
+  _id: string;
+  orgId: string;
+  branchId: string;
+  memberId: string;
+  recordedByUserId: string;
+  date: string;
+  weightKg?: number;
+  heightCm?: number;
+  bodyFatPercent?: number;
+  measurements?: FitnessMeasurements;
+  photoUrls: string[];
+  notes?: string;
+  createdAt: string;
+}
+
+// ---- Expenses ----
+
+export type ExpenseCategory =
+  | "rent"
+  | "electricity"
+  | "maintenance"
+  | "staff_salary"
+  | "equipment"
+  | "marketing"
+  | "vendor"
+  | "other";
+
+export interface Expense {
+  _id: string;
+  orgId: string;
+  branchId: string;
+  category: ExpenseCategory;
+  description: string;
+  vendor?: string;
+  amountPaise: number;
+  date: string;
+  createdByUserId: string;
+  createdAt: string;
+}
+
+// ---- Leads & enquiries ----
+
+export type LeadSource = "walk_in" | "referral" | "website" | "social_media" | "phone" | "other";
+export type LeadStatus = "new" | "contacted" | "trial_scheduled" | "trial_completed" | "converted" | "lost";
+
+export interface Lead {
+  _id: string;
+  orgId: string;
+  branchId: string;
+  name: string;
+  phone: string;
+  email?: string;
+  source: LeadSource;
+  status: LeadStatus;
+  assignedToUserId?: string | { _id: string; name?: string; email: string };
+  followUpDate?: string;
+  notes?: string;
+  lostReason?: string;
+  createdAt: string;
+}
+
+// ---- Trainer dashboard ----
+
+export interface TrainerPtPackageRow {
+  _id: string;
+  memberId: string;
+  memberName: string;
+  name: string;
+  totalSessions: number;
+  sessionsUsed: number;
+}
+
+// ---- Audit logs ----
+
+export interface AuditLogRow {
+  _id: string;
+  /** null when the gym has been deleted; absent for platform-level entries */
+  orgId?: string | { _id: string; name: string } | null;
+  /** absent for entries written by scheduled jobs; null when the user has since been deleted */
+  actorUserId?: string | { _id: string; name?: string; email?: string } | null;
+  action: string;
+  targetType?: string;
+  targetId?: string;
+  metadata?: Record<string, unknown>;
+  createdAt: string;
 }
 
 export interface PlatformInvoice {
@@ -384,6 +570,7 @@ export interface StaffRow {
   role: InvitableRole;
   branchId: string;
   accepted: boolean;
+  ptRatePerSessionPaise?: number;
 }
 
 // ---- Franchisees ----
@@ -405,4 +592,144 @@ export interface NetworkBranch {
 export interface Network {
   companyBranches: NetworkBranch[];
   franchisees: Array<{ id: string; name: string; status: string; branches: NetworkBranch[] }>;
+}
+
+// ---- Round 3: country settings ----
+
+export type CountryCode = "IN" | "AE" | "GB" | "US" | "AU";
+
+export interface OrgLocale {
+  country: CountryCode;
+  currency: string;
+  locale: string;
+  timeZone: string;
+  tax: { name: string; ratePct: number; split?: "cgst_sgst"; inclusive?: boolean };
+  taxIdLabel: string;
+  taxId?: string;
+  gateway: "razorpay" | "stripe";
+  phone: { dialCode: string; example: string };
+}
+
+export interface TaxBreakdown {
+  name: string;
+  ratePct: number;
+  taxablePaise: number;
+  taxPaise: number;
+  lines: Array<{ label: string; ratePct: number; amountPaise: number }>;
+  totalPaise: number;
+}
+
+export interface CountryOption {
+  code: CountryCode;
+  name: string;
+  currency: string;
+  timeZones: string[];
+  tax: { name: string; ratePct: number; taxIdLabel: string };
+  phone: { dialCode: string; example: string };
+  gateway: "razorpay" | "stripe";
+}
+
+
+// ---- Per-gym payments ----
+
+export type PaymentProvider = "razorpay_oauth" | "razorpay_keys" | "mock";
+export type PaymentAccountLevel = "org" | "franchisee" | "branch";
+
+/** An order created on the gym's own payment account. `keyId` is what checkout takes as `key` ("mock" for the test gateway). */
+export interface GatewayOrder {
+  orderId: string;
+  amountPaise: number;
+  currency?: string;
+  provider?: PaymentProvider;
+  keyId: string;
+  accountName?: string;
+}
+
+export interface PaymentAccountTarget {
+  level: PaymentAccountLevel;
+  franchiseeId?: string;
+  branchId?: string;
+}
+
+export interface PaymentAccount {
+  _id: string;
+  level: PaymentAccountLevel;
+  franchiseeId: string | null;
+  branchId: string | null;
+  provider: PaymentProvider;
+  externalAccountId: string;
+  displayName: string;
+  livemode: boolean;
+  connectedAt?: string;
+}
+
+export interface PaymentAccountsOverview {
+  accounts: PaymentAccount[];
+  branches: Array<{
+    _id: string;
+    name: string;
+    franchiseeId: string | null;
+    franchiseeName: string | null;
+    paysInto: { accountId: string; level: PaymentAccountLevel; displayName: string; provider: PaymentProvider } | null;
+    canManage: boolean;
+  }>;
+  franchisees: Array<{ _id: string; name: string; canManage: boolean }>;
+  canManageOrg: boolean;
+  providers: PaymentProvider[];
+  country: CountryCode;
+}
+
+// ---- Self-onboarding and Repflow billing ----
+
+export interface SignupPackage {
+  _id: string;
+  name: string;
+  description: string | null;
+  monthlyPricePaise: number;
+  yearlyPricePaise: number | null;
+  chargeUnit: ChargeUnit;
+  trialDays: number;
+  minBranches: number;
+  limits: Partial<PackageLimits>;
+  modules: Array<{ key: string; label: string }>;
+  /** Billing page only: why this package doesn't fit the gym (e.g. too many branches), or null. */
+  fitProblem?: string | null;
+}
+
+export interface OnboardingStep {
+  key: "locale" | "plans" | "payments" | "staff" | "members" | "checkin" | "subscribe";
+  label: string;
+  hint: string;
+  href: string;
+  done: boolean;
+  optional?: boolean;
+}
+
+export interface OnboardingState {
+  steps: OnboardingStep[];
+  progress: { done: number; total: number; complete: boolean };
+  dismissed: boolean;
+  status: OrgStatus;
+  trialEndsAt: string | null;
+  trialDaysLeft: number | null;
+  graceEndsAt: string | null;
+}
+
+export interface OwnerBilling {
+  org: { status: OrgStatus; trialEndsAt: string | null; graceEndsAt: string | null };
+  subscription: {
+    _id: string;
+    status: "trial" | "active" | "grace" | "suspended";
+    billingCycle: "monthly" | "yearly";
+    discountPct: number;
+    trialEndsAt: string | null;
+    currentPeriodEnd: string | null;
+    graceEndsAt: string | null;
+    package: SignupPackage | null;
+  } | null;
+  nextChargePaise: number | null;
+  currency: string;
+  branchCount: number;
+  invoices: Array<{ _id: string; periodStart: string; periodEnd: string; amountPaise: number; gstPaise: number; totalPaise: number; status: "pending" | "paid" | "failed" }>;
+  packages: SignupPackage[];
 }

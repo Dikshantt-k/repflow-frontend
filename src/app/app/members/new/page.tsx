@@ -3,10 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { ApiError, branchesApi, membersApi, plansApi } from "@/lib/api";
+import { ApiError, branchesApi, membersApi, paymentsApi, plansApi, staffApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { collectUpiPayment, loadRazorpayScript } from "@/lib/razorpay";
 import { formatPaise, rupeesToPaise } from "@/lib/format";
-import { Avatar, Button, Card, Field, Input, Pill, Select } from "@/components/ui";
-import type { Branch, Plan } from "@/types/api";
+import { chargeFor, currencySymbol, inclTaxLabel, looksLikeMobile, orgLocale, phoneHint, plusTaxSuffix, pricesIncludeTax } from "@/lib/locale";
+import { Avatar, Button, Card, Field, Input, Modal, Pill, Select } from "@/components/ui";
+import type { Branch, Plan, StaffRow } from "@/types/api";
 
 const GENDERS: Array<{ value: string; label: string }> = [
   { value: "prefer_not_to_say", label: "Prefer not to say" },
@@ -15,7 +18,6 @@ const GENDERS: Array<{ value: string; label: string }> = [
   { value: "other", label: "Other" },
 ];
 
-const PHONE_REGEX = /^[6-9]\d{9}$/;
 
 function todayIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -23,14 +25,16 @@ function todayIso(): string {
 
 function planLabel(plan: Plan): string {
   const length = plan.lengthUnit === "session" ? `${plan.lengthValue} sessions` : `${plan.lengthValue} ${plan.lengthUnit}${plan.lengthValue === 1 ? "" : "s"}`;
-  return `${plan.name} — ${length} — ${formatPaise(plan.pricePaise)}`;
+  return `${plan.name} — ${length} — ${formatPaise(plan.pricePaise)}${plusTaxSuffix()}`;
 }
 
 export default function AddMemberPage() {
   const router = useRouter();
+  const { context } = useAuth();
 
   const [branches, setBranches] = useState<Branch[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [staff, setStaff] = useState<StaffRow[]>([]);
   const [loadingOptions, setLoadingOptions] = useState(true);
 
   // Personal details
@@ -47,6 +51,7 @@ export default function AddMemberPage() {
   // Membership
   const [branchId, setBranchId] = useState("");
   const [planId, setPlanId] = useState("");
+  const [trainerUserId, setTrainerUserId] = useState("");
   const [startDate, setStartDate] = useState(todayIso());
 
   // Payment
@@ -61,15 +66,23 @@ export default function AddMemberPage() {
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [duplicateMemberId, setDuplicateMemberId] = useState<string | null>(null);
+  const [credentials, setCredentials] = useState<{ memberId: string; memberCode: string; tempPassword: string; receiptNo: string } | null>(
+    null
+  );
 
   useEffect(() => {
-    Promise.all([branchesApi.list(), plansApi.list()])
-      .then(([b, p]) => {
+    Promise.all([branchesApi.list(), plansApi.list(), staffApi.list()])
+      .then(([b, p, s]) => {
         setBranches(b.branches);
         setPlans(p.plans);
+        setStaff(s.staff);
         if (b.branches.length === 1) setBranchId(b.branches[0]!._id);
       })
       .finally(() => setLoadingOptions(false));
+    // Preload now so paying via UPI only has to await order creation inside the click
+    // handler — awaiting the script load itself there is what can push Razorpay's
+    // checkout into a new tab instead of an in-page modal on some browsers.
+    void loadRazorpayScript();
   }, []);
 
   const eligiblePlans = useMemo(
@@ -77,11 +90,17 @@ export default function AddMemberPage() {
     [plans, branchId]
   );
 
+  const branchTrainers = useMemo(
+    () => staff.filter((s) => s.role === "trainer" && s.branchId === branchId),
+    [staff, branchId]
+  );
+
   const selectedPlan = eligiblePlans.find((p) => p._id === planId) ?? null;
 
   const discountPaise = rupeesToPaise(Number(discountRupees) || 0);
   const joiningFeePaise = selectedPlan && !joiningFeeWaived ? selectedPlan.joiningFeePaise : 0;
-  const totalPaise = selectedPlan ? Math.max(selectedPlan.pricePaise + joiningFeePaise - discountPaise, 0) : 0;
+  // Round 5: in a tax-exclusive gym (US default) the tax goes on top of the discounted price, as on the server.
+  const totalPaise = selectedPlan ? chargeFor(Math.max(selectedPlan.pricePaise + joiningFeePaise - discountPaise, 0)) : 0;
   const amountPaidPaise = rupeesToPaise(Number(amountPaidRupees) || 0);
   const balancePaise = Math.max(totalPaise - amountPaidPaise, 0);
 
@@ -92,7 +111,7 @@ export default function AddMemberPage() {
     }
   }, [totalPaise]);
 
-  const phoneValid = PHONE_REGEX.test(phone);
+  const phoneValid = looksLikeMobile(phone); // exact check for the gym's country happens on the server (Round 3)
 
   async function submit() {
     setFormError(null);
@@ -103,7 +122,7 @@ export default function AddMemberPage() {
       return;
     }
     if (!phoneValid) {
-      setFormError("Enter a 10-digit mobile number, for example 98200 11234.");
+      setFormError(`Enter a ${phoneHint()}.`);
       return;
     }
     if (!branchId) {
@@ -114,9 +133,25 @@ export default function AddMemberPage() {
       setFormError("Choose a membership plan.");
       return;
     }
+    if (mode === "upi" && amountPaidPaise > 0 && amountPaidPaise < 100) {
+      setFormError(`Enter at least ${currencySymbol()}1 to collect via UPI.`);
+      return;
+    }
 
     setSubmitting(true);
+    let paid = false;
     try {
+      let razorpayProof: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string } | undefined;
+      if (mode === "upi" && amountPaidPaise > 0) {
+        const order = await paymentsApi.createRazorpayOrder(amountPaidPaise, { branchId });
+        razorpayProof = await collectUpiPayment({
+          order,
+          orgName: context?.org?.name ?? "Repflow",
+          description: `${selectedPlan.name} membership`,
+        });
+        paid = true;
+      }
+
       const res = await membersApi.create({
         branchId,
         firstName: firstName.trim(),
@@ -127,6 +162,7 @@ export default function AddMemberPage() {
         emergencyContact: emergencyName || emergencyPhone ? { name: emergencyName || undefined, phone: emergencyPhone || undefined } : undefined,
         healthNotes: healthNotes.trim() || undefined,
         email: email.trim() || undefined,
+        trainerUserId: trainerUserId || undefined,
         planId: selectedPlan._id,
         startDate,
         joiningFeeWaived,
@@ -135,16 +171,38 @@ export default function AddMemberPage() {
         amountPaidPaise,
         gstInvoice,
         sendWelcomeMessage,
+        ...razorpayProof,
       });
 
-      router.push(`/app/members/${res.member._id}?toast=${encodeURIComponent(`Member added. Receipt ${res.receiptNo}.`)}`);
+      const toastMsg = `Member added. Receipt ${res.receiptNo}.${
+        res.appliedToDuesPaise > 0 ? ` ${formatPaise(res.appliedToDuesPaise)} applied to earlier dues.` : ""
+      }`;
+
+      if (res.tempPassword) {
+        setCredentials({
+          memberId: res.member._id,
+          memberCode: res.member.memberCode,
+          tempPassword: res.tempPassword,
+          receiptNo: res.receiptNo,
+        });
+      } else {
+        router.push(`/app/members/${res.member._id}?toast=${encodeURIComponent(toastMsg)}`);
+      }
     } catch (err) {
-      if (err instanceof ApiError) {
+      if (paid) {
+        setFormError(
+          `${formatPaise(amountPaidPaise)} was collected via UPI, but the member couldn't be saved. Don't collect again — fix the issue below and contact support to reconcile this payment.`
+        );
+      } else if (err instanceof Error && err.message === "Payment cancelled.") {
+        setFormError("Payment was cancelled. Try again when ready.");
+      } else if (err instanceof ApiError) {
         setFormError(err.message);
-        const details = err.details as { existingMemberId?: string } | undefined;
-        if (err.status === 409 && details?.existingMemberId) setDuplicateMemberId(details.existingMemberId);
       } else {
         setFormError("Couldn't save this member. Try again.");
+      }
+      if (err instanceof ApiError) {
+        const details = err.details as { existingMemberId?: string } | undefined;
+        if (err.status === 409 && details?.existingMemberId) setDuplicateMemberId(details.existingMemberId);
       }
     } finally {
       setSubmitting(false);
@@ -178,12 +236,12 @@ export default function AddMemberPage() {
               <Input value={lastName} onChange={(e) => setLastName(e.target.value)} />
             </Field>
           </div>
-          <Field label="Mobile *" hint="We use it for login and WhatsApp updates" error={phone && !phoneValid ? "Enter a 10-digit mobile number, for example 98200 11234." : undefined}>
+          <Field label="Mobile *" hint="We use it for login and WhatsApp updates" error={phone && !phoneValid ? `Enter a ${phoneHint()}.` : undefined}>
             <Input
-              inputMode="numeric"
+              inputMode="tel"
               value={phone}
-              onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-              placeholder="98200 11234"
+              onChange={(e) => setPhone(e.target.value.replace(/[^\d+\s()-]/g, "").slice(0, 20))}
+              placeholder={orgLocale().phone.example}
             />
           </Field>
           <div className="grid grid-cols-2 gap-3">
@@ -225,6 +283,7 @@ export default function AddMemberPage() {
                 onChange={(e) => {
                   setBranchId(e.target.value);
                   setPlanId("");
+                  setTrainerUserId("");
                 }}
                 disabled={loadingOptions}
               >
@@ -246,6 +305,16 @@ export default function AddMemberPage() {
                 ))}
               </Select>
             </Field>
+            <Field label="Trainer (optional)" hint="Their workout, diet and PT packages will be managed by this trainer only">
+              <Select value={trainerUserId} onChange={(e) => setTrainerUserId(e.target.value)} disabled={!branchId}>
+                <option value="">No trainer assigned</option>
+                {branchTrainers.map((t) => (
+                  <option key={t.userId} value={t.userId}>
+                    {t.name ?? t.email}
+                  </option>
+                ))}
+              </Select>
+            </Field>
             <Field label="Start date">
               <Input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
             </Field>
@@ -255,7 +324,7 @@ export default function AddMemberPage() {
             <Card>
               <h2 className="text-xl">Payment</h2>
               <div className="flex flex-col">
-                <Row label="Plan price" value={formatPaise(selectedPlan.pricePaise)} />
+                <Row label={`Plan price${plusTaxSuffix()}`} value={formatPaise(selectedPlan.pricePaise)} />
                 {selectedPlan.joiningFeePaise > 0 && (
                   <div className="flex justify-between items-center gap-3 py-2.5 border-t border-line2">
                     <label className="flex items-center gap-2">
@@ -271,12 +340,12 @@ export default function AddMemberPage() {
                     inputMode="decimal"
                     value={discountRupees}
                     onChange={(e) => setDiscountRupees(e.target.value.replace(/[^\d.]/g, ""))}
-                    placeholder="₹0"
+                    placeholder={`${currencySymbol()}0`}
                     className="w-28 text-right"
                   />
                 </div>
                 <div className="flex justify-between items-center gap-3 py-2.5 border-t border-line2">
-                  <span className="font-semibold">Total</span>
+                  <span className="font-semibold">{!pricesIncludeTax() && inclTaxLabel() ? `Total (${inclTaxLabel()})` : "Total"}</span>
                   <b className="font-display text-2xl">{formatPaise(totalPaise)}</b>
                 </div>
               </div>
@@ -310,7 +379,7 @@ export default function AddMemberPage() {
 
               <label className="flex items-center gap-2 pt-2 border-t border-line2">
                 <input type="checkbox" checked={gstInvoice} onChange={(e) => setGstInvoice(e.target.checked)} className="w-[18px] h-[18px] accent-accent" />
-                GST invoice
+                {orgLocale().tax.name} invoice
               </label>
               <label className="flex items-center gap-2">
                 <input
@@ -343,11 +412,35 @@ export default function AddMemberPage() {
               Cancel
             </Link>
             <Button variant="primary" disabled={submitting} onClick={submit} className="flex-1">
-              {submitting ? "Saving…" : "Save member and show receipt"}
+              {submitting ? (mode === "upi" && amountPaidPaise > 0 ? "Opening payment…" : "Saving…") : "Save member and show receipt"}
             </Button>
           </div>
         </div>
       </div>
+
+      <Modal open={!!credentials} onClose={() => {}} title="Member login details">
+        {credentials && (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted">
+              Share these with the member so they can sign in to the member app. This password is only shown once.
+            </p>
+            <div className="flex flex-col gap-2 bg-line2 rounded-lg p-3.5">
+              <Row label="Member code" value={credentials.memberCode} />
+              <Row label="Temporary password" value={credentials.tempPassword} />
+            </div>
+            <Button
+              variant="primary"
+              onClick={() =>
+                router.push(
+                  `/app/members/${credentials.memberId}?toast=${encodeURIComponent(`Member added. Receipt ${credentials.receiptNo}.`)}`
+                )
+              }
+            >
+              Done
+            </Button>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

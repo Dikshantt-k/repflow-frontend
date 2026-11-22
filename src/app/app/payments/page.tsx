@@ -2,8 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { ApiError, attendanceApi, duesApi, paymentsApi } from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
+import { collectUpiPayment, loadRazorpayScript } from "@/lib/razorpay";
+import { can } from "@/lib/permissions";
 import { Button, Card, EmptyState, Field, Input, Kpi, Modal, Pill, Spinner, Toast } from "@/components/ui";
 import { formatDate, formatPaise, rupeesToPaise } from "@/lib/format";
+import { currencySymbol, orgLocale } from "@/lib/locale";
 import { ReceiptModal } from "@/components/ReceiptModal";
 import type { Dues, Member, Payment, PaymentMode } from "@/types/api";
 
@@ -12,11 +16,17 @@ function memberLabel(memberId: string | { firstName: string; lastName?: string }
   return `${memberId.firstName} ${memberId.lastName ?? ""}`.trim();
 }
 
+function memberIdOf(due: Dues): string {
+  return typeof due.memberId === "string" ? due.memberId : due.memberId._id;
+}
+
 function memberPhone(memberId: string | { phone?: string }): string | undefined {
   return typeof memberId === "string" ? undefined : memberId.phone;
 }
 
 export default function PaymentsPage() {
+  const { context } = useAuth();
+  const canRecord = can.recordPayment(context?.role);
   const [dues, setDues] = useState<Dues[]>([]);
   const [duesLoading, setDuesLoading] = useState(true);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -66,6 +76,9 @@ export default function PaymentsPage() {
   useEffect(() => {
     void loadDues();
     void loadPayments();
+    // Preload so paying via UPI only has to await order creation inside the click handler —
+    // see the matching note in member/renew/page.tsx for why this avoids a new-tab checkout.
+    void loadRazorpayScript();
   }, []);
 
   useEffect(() => {
@@ -73,15 +86,21 @@ export default function PaymentsPage() {
       setSearchResults([]);
       return;
     }
+    let cancelled = false;
     const handle = setTimeout(async () => {
       try {
         const res = await attendanceApi.lookup(searchQuery.trim());
-        setSearchResults(res.members);
+        // A later-typed query can resolve before an earlier, slower one — only the most
+        // recent request for the current text should ever be allowed to set results.
+        if (!cancelled) setSearchResults(res.members);
       } catch {
-        setSearchResults([]);
+        if (!cancelled) setSearchResults([]);
       }
     }, 300);
-    return () => clearTimeout(handle);
+    return () => {
+      cancelled = true;
+      clearTimeout(handle);
+    };
   }, [searchQuery, selectedMember]);
 
   function selectMember(m: Member) {
@@ -104,18 +123,32 @@ export default function PaymentsPage() {
     }
     const amount = Number(amountRupees);
     if (!amountRupees.trim() || !(amount > 0)) {
-      setRecordError("Enter an amount above ₹0.");
+      setRecordError(`Enter an amount above ${currencySymbol()}0.`);
+      return;
+    }
+    const amountPaidPaise = rupeesToPaise(amount);
+    if (mode === "upi" && amountPaidPaise < 100) {
+      setRecordError(`Enter at least ${currencySymbol()}1 to collect via UPI.`);
       return;
     }
 
     setRecordBusy(true);
+    let paid = false;
     try {
+      let razorpayProof: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string } | undefined;
+      if (mode === "upi") {
+        const order = await paymentsApi.createRazorpayOrder(amountPaidPaise, { memberId: selectedMember.id });
+        razorpayProof = await collectUpiPayment({ order, orgName: context?.org?.name ?? "Repflow", description: description.trim() });
+        paid = true;
+      }
+
       const res = await paymentsApi.record({
         memberId: selectedMember.id,
         description: description.trim(),
-        amountPaidPaise: rupeesToPaise(amount),
+        amountPaidPaise,
         mode,
         gstInvoice,
+        ...razorpayProof,
       });
       showToast("Payment saved. Receipt ready.");
       setReceiptId(res.payment._id);
@@ -125,7 +158,15 @@ export default function PaymentsPage() {
       setAmountRupees("");
       void loadPayments();
     } catch (err) {
-      setRecordError(err instanceof ApiError ? err.message : "Couldn't save this payment.");
+      if (paid) {
+        setRecordError(
+          `${formatPaise(amountPaidPaise)} was collected via UPI, but this payment couldn't be saved. Don't collect again — contact support to reconcile this payment.`
+        );
+      } else if (err instanceof Error && err.message === "Payment cancelled.") {
+        setRecordError("Payment was cancelled. Try again when ready.");
+      } else {
+        setRecordError(err instanceof ApiError ? err.message : "Couldn't save this payment.");
+      }
     } finally {
       setRecordBusy(false);
     }
@@ -144,24 +185,51 @@ export default function PaymentsPage() {
     setCollectError(null);
     const amount = Number(collectAmountRupees);
     if (!collectAmountRupees.trim() || !(amount > 0)) {
-      setCollectError("Enter an amount above ₹0.");
+      setCollectError(`Enter an amount above ${currencySymbol()}0.`);
+      return;
+    }
+    const amountPaise = rupeesToPaise(amount);
+    if (collectMode === "upi" && amountPaise < 100) {
+      setCollectError(`Enter at least ${currencySymbol()}1 to collect via UPI.`);
       return;
     }
 
     setCollectBusy(true);
+    let paid = false;
     try {
+      let razorpayProof: { razorpayOrderId: string; razorpayPaymentId: string; razorpaySignature: string } | undefined;
+      if (collectMode === "upi") {
+        const order = await paymentsApi.createRazorpayOrder(amountPaise, { memberId: memberIdOf(collectingDue) });
+        razorpayProof = await collectUpiPayment({
+          order,
+          orgName: context?.org?.name ?? "Repflow",
+          description: `Dues collection — ${memberLabel(collectingDue.memberId)}`,
+        });
+        paid = true;
+      }
+
       const res = await duesApi.collect(collectingDue._id, {
-        amountPaise: rupeesToPaise(amount),
+        amountPaise,
         mode: collectMode,
         gstInvoice: collectGstInvoice,
+        ...razorpayProof,
       });
-      showToast("Payment collected.");
+      const extra = res.appliedToOtherDuesPaise > 0 ? ` ${formatPaise(res.appliedToOtherDuesPaise)} also applied to another due.` : "";
+      showToast(`Payment collected.${extra}`);
       setCollectingDue(null);
       setReceiptId(res.payment._id);
       void loadDues();
       void loadPayments();
     } catch (err) {
-      setCollectError(err instanceof ApiError ? err.message : "Couldn't collect this payment.");
+      if (paid) {
+        setCollectError(
+          `${formatPaise(amountPaise)} was collected via UPI, but this couldn't be saved. Don't collect again — contact support to reconcile this payment.`
+        );
+      } else if (err instanceof Error && err.message === "Payment cancelled.") {
+        setCollectError("Payment was cancelled. Try again when ready.");
+      } else {
+        setCollectError(err instanceof ApiError ? err.message : "Couldn't collect this payment.");
+      }
     } finally {
       setCollectBusy(false);
     }
@@ -195,6 +263,7 @@ export default function PaymentsPage() {
       </div>
 
       <div className="flex flex-wrap gap-3.5 items-start">
+        {canRecord && (
         <Card className="flex-1 basis-[380px]">
           <h2>Record a payment</h2>
 
@@ -235,7 +304,7 @@ export default function PaymentsPage() {
           </Field>
 
           <Field label="Amount">
-            <Input inputMode="decimal" value={amountRupees} onChange={(e) => setAmountRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder="₹" />
+            <Input inputMode="decimal" value={amountRupees} onChange={(e) => setAmountRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder={`${currencySymbol()}`} />
           </Field>
 
           <div className="flex gap-2">
@@ -252,15 +321,16 @@ export default function PaymentsPage() {
 
           <label className="flex items-center gap-2 text-sm font-medium">
             <input type="checkbox" checked={gstInvoice} onChange={(e) => setGstInvoice(e.target.checked)} className="w-[18px] h-[18px] accent-accent" />
-            GST invoice
+            {orgLocale().tax.name} invoice
           </label>
 
           {recordError && <p className="text-sm font-semibold text-warn">{recordError}</p>}
 
           <Button variant="primary" className="w-full" onClick={submitPayment} disabled={recordBusy}>
-            {recordBusy ? "Saving…" : "Save and send receipt"}
+            {recordBusy ? (mode === "upi" ? "Opening payment…" : "Saving…") : "Save and send receipt"}
           </Button>
         </Card>
+        )}
 
         <Card className="flex-1 basis-[380px] p-0 overflow-x-auto">
           <div className="p-5 pb-0">
@@ -298,9 +368,11 @@ export default function PaymentsPage() {
                     <td className="p-3">
                       <div className="flex gap-2 justify-end">
                         <Button onClick={() => remind(due)}>Remind</Button>
-                        <Button variant="primary" onClick={() => openCollect(due)}>
-                          Collect
-                        </Button>
+                        {canRecord && (
+                          <Button variant="primary" onClick={() => openCollect(due)}>
+                            Collect
+                          </Button>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -379,7 +451,7 @@ export default function PaymentsPage() {
                 onChange={(e) => setCollectGstInvoice(e.target.checked)}
                 className="w-[18px] h-[18px] accent-accent"
               />
-              GST invoice
+              {orgLocale().tax.name} invoice
             </label>
             {collectError && <p className="text-sm font-semibold text-warn">{collectError}</p>}
             <div className="flex gap-2 border-t border-line2 pt-3">
@@ -387,7 +459,7 @@ export default function PaymentsPage() {
                 Cancel
               </Button>
               <Button variant="primary" className="flex-1" onClick={submitCollect} disabled={collectBusy}>
-                {collectBusy ? "Saving…" : "Collect payment"}
+                {collectBusy ? (collectMode === "upi" ? "Opening payment…" : "Saving…") : "Collect payment"}
               </Button>
             </div>
           </div>

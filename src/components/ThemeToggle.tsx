@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "repflow-theme";
 
-export function ThemeToggle({ className }: { className?: string }) {
+export function ThemeToggle({ className, variant = "sidebar" }: { className?: string; variant?: "sidebar" | "light" }) {
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
 
   useEffect(() => {
@@ -24,12 +24,17 @@ export function ThemeToggle({ className }: { className?: string }) {
     setTheme(next);
   }
 
+  const variants = {
+    sidebar: "border-side-line text-side-ink hover:bg-side-active",
+    light: "border-line text-ink bg-surface hover:bg-line2",
+  };
+
   return (
     <button
       type="button"
       onClick={toggle}
       aria-label="Switch theme"
-      className={`inline-flex items-center justify-center w-10 h-10 flex-none rounded-[10px] border border-side-line text-side-ink hover:bg-side-active ${className ?? ""}`}
+      className={`inline-flex items-center justify-center w-10 h-10 flex-none rounded-[10px] border transition ${variants[variant]} ${className ?? ""}`}
     >
       {theme === "dark" ? (
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

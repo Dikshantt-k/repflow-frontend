@@ -3,6 +3,8 @@
 import { useEffect, useState } from "react";
 import { branchesApi, staffApi, ApiError } from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { formatPaise, rupeesToPaise } from "@/lib/format";
+import { currencySymbol } from "@/lib/locale";
 import { Badge, Button, Card, EmptyState, Field, Input, Modal, Select, Spinner, Toast } from "@/components/ui";
 import type { Branch, InvitableRole, StaffRow } from "@/types/api";
 
@@ -18,6 +20,7 @@ export default function StaffPage() {
   const [staff, setStaff] = useState<StaffRow[] | null>(null);
   const [branches, setBranches] = useState<Branch[]>([]);
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [rateRow, setRateRow] = useState<StaffRow | null>(null);
   const [toast, setToast] = useState<string | null>(null);
 
   const [name, setName] = useState("");
@@ -96,6 +99,7 @@ export default function StaffPage() {
                 <th className="p-3 bg-line2">Email</th>
                 <th className="p-3 bg-line2">Role</th>
                 <th className="p-3 bg-line2">Branch</th>
+                <th className="p-3 bg-line2">PT rate</th>
                 <th className="p-3 bg-line2">Status</th>
                 <th className="p-3 bg-line2 rounded-r-lg"></th>
               </tr>
@@ -107,6 +111,15 @@ export default function StaffPage() {
                   <td className="p-3">{s.email}</td>
                   <td className="p-3">{ROLE_LABELS[s.role]}</td>
                   <td className="p-3">{branchName(s.branchId)}</td>
+                  <td className="p-3">
+                    {s.role === "trainer" ? (
+                      <button type="button" className="text-sm text-link font-semibold" onClick={() => setRateRow(s)}>
+                        {s.ptRatePerSessionPaise ? `${formatPaise(s.ptRatePerSessionPaise)} / session` : "Set rate"}
+                      </button>
+                    ) : (
+                      <span className="text-muted">—</span>
+                    )}
+                  </td>
                   <td className="p-3">
                     <Badge tone={s.accepted ? "green" : "orange"}>{s.accepted ? "Active" : "Invited"}</Badge>
                   </td>
@@ -153,7 +166,58 @@ export default function StaffPage() {
         </Button>
       </Modal>
 
+      <PtRateModal
+        row={rateRow}
+        onClose={() => setRateRow(null)}
+        onSaved={() => {
+          setRateRow(null);
+          load();
+        }}
+      />
+
       <Toast message={toast} />
     </>
+  );
+}
+
+function PtRateModal({ row, onClose, onSaved }: { row: StaffRow | null; onClose: () => void; onSaved: () => void }) {
+  const [rateRupees, setRateRupees] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- prefill from the row whenever a new one opens
+    if (row) setRateRupees(row.ptRatePerSessionPaise ? String(row.ptRatePerSessionPaise / 100) : "");
+  }, [row]);
+
+  async function submit() {
+    if (!row) return;
+    setError(null);
+    const rupees = Number(rateRupees);
+    if (!rateRupees.trim() || !(rupees > 0)) {
+      setError(`Enter a rate above ${currencySymbol()}0.`);
+      return;
+    }
+    setBusy(true);
+    try {
+      await staffApi.updatePtRate(row.userId, { branchId: row.branchId, role: row.role, ptRatePerSessionPaise: rupeesToPaise(rupees) });
+      onSaved();
+    } catch (err) {
+      setError(err instanceof ApiError ? err.message : "Couldn't save this rate.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal open={!!row} onClose={onClose} title={row ? `${row.name ?? row.email}'s PT rate` : "PT rate"}>
+      <Field label={`Rate per session (${currencySymbol()})`} hint="Used to auto-price a PT package when this trainer sells one">
+        <Input inputMode="decimal" value={rateRupees} onChange={(e) => setRateRupees(e.target.value.replace(/[^\d.]/g, ""))} placeholder={`${currencySymbol()}`} />
+      </Field>
+      {error && <p className="text-sm font-semibold text-warn">{error}</p>}
+      <Button variant="primary" disabled={busy} onClick={submit}>
+        {busy ? "Saving…" : "Save rate"}
+      </Button>
+    </Modal>
   );
 }

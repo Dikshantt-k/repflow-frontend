@@ -12,6 +12,7 @@
   --on-accent: #ffffff;
   --accent-soft: #e2f1ed;
   --accent-ink: #0a4f44;
+  --accent-pop: #2bb39a;
   --link: #0e6b5c;
   --warn: #b4480f;
   --warn-soft: #fcebdd;
@@ -49,6 +50,7 @@
     --on-accent: #06201b;
     --accent-soft: #163a33;
     --accent-ink: #8fe0cf;
+    --accent-pop: #2bb39a;
     --link: #4cc9b0;
     --warn: #f2a06c;
     --warn-soft: #3a2416;
@@ -86,6 +88,7 @@
   --on-accent: #06201b;
   --accent-soft: #163a33;
   --accent-ink: #8fe0cf;
+  --accent-pop: #2bb39a;
   --link: #4cc9b0;
   --warn: #f2a06c;
   --warn-soft: #3a2416;
@@ -114,6 +117,126 @@
   color-scheme: light;
 }
 
+/* ---- App shell palette ----
+   Light: charcoal sidebar #2A2A2F, light page #F2F2F3, white cards, coral accent #E5533D.
+   Dark  ("Midnight"): sidebar #111317, page #16181D, cards #1E2128, coral #FF6B57. */
+
+.theme-slate {
+  --bg: #f2f2f3;
+  --surface: #ffffff;
+  --ink: #1f1d1b;
+  --muted: #6b6b73;
+  --line: #e7e7ea;
+  --line2: #efeff1;
+  --accent: #e5533d;
+  --accent-hover: #d4462f;
+  --on-accent: #ffffff;
+  --accent-soft: #fdeceb;
+  --accent-ink: #c23a28;
+  --accent-pop: #e5533d;
+  --link: #d4462f;
+  --warn: #c23a28;
+  --warn-soft: #fdeceb;
+  --warn-line: #fdeceb;
+  --warn-ink: #c23a28;
+  --green-soft: #e6f4ea;
+  --green-ink: #1e7a3c;
+  --blue-soft: #ececef;
+  --blue-ink: #3f3f46;
+  --violet-soft: #ececef;
+  --violet-ink: #3f3f46;
+  --gray-soft: #f2f2f3;
+  --gray-ink: #3f3f46;
+  --side: #2a2a2f;
+  --side-ink: #f4f4f5;
+  --side-muted: #a1a1aa;
+  --side-active: #3a3a40;
+  --side-field: #3a3a40;
+  --side-line: #45454c;
+  --side-accent: #e5533d;
+  --panel: #1f1f22;
+  --panel-tile: #2e2e33;
+  --focus: #e5533d;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) .theme-slate {
+    --bg: #16181d;
+    --surface: #1e2128;
+    --ink: #ecedef;
+    --muted: #8b909a;
+    --line: #2a2e37;
+    --line2: #242831;
+    --accent: #ff6b57;
+    --accent-hover: #ff8070;
+    --on-accent: #ffffff;
+    --accent-soft: #3a2423;
+    --accent-ink: #ff8a78;
+    --accent-pop: #ff6b57;
+    --link: #ff8a78;
+    --warn: #ff8a78;
+    --warn-soft: #3a2423;
+    --warn-line: #3a2423;
+    --warn-ink: #ff8a78;
+    --green-soft: #17322a;
+    --green-ink: #6fd39a;
+    --blue-soft: #2a2e37;
+    --blue-ink: #ecedef;
+    --violet-soft: #2a2e37;
+    --violet-ink: #ecedef;
+    --gray-soft: #2a2e37;
+    --gray-ink: #ecedef;
+    --side: #111317;
+    --side-ink: #ecedef;
+    --side-muted: #8b909a;
+    --side-active: #2a2e37;
+    --side-field: #22262e;
+    --side-line: #2a2e37;
+    --side-accent: #ff6b57;
+    --panel: #111317;
+    --panel-tile: #22262e;
+    --focus: #ff6b57;
+  }
+}
+
+:root[data-theme="dark"] .theme-slate {
+  --bg: #16181d;
+  --surface: #1e2128;
+  --ink: #ecedef;
+  --muted: #8b909a;
+  --line: #2a2e37;
+  --line2: #242831;
+  --accent: #ff6b57;
+  --accent-hover: #ff8070;
+  --on-accent: #ffffff;
+  --accent-soft: #3a2423;
+  --accent-ink: #ff8a78;
+  --accent-pop: #ff6b57;
+  --link: #ff8a78;
+  --warn: #ff8a78;
+  --warn-soft: #3a2423;
+  --warn-line: #3a2423;
+  --warn-ink: #ff8a78;
+  --green-soft: #17322a;
+  --green-ink: #6fd39a;
+  --blue-soft: #2a2e37;
+  --blue-ink: #ecedef;
+  --violet-soft: #2a2e37;
+  --violet-ink: #ecedef;
+  --gray-soft: #2a2e37;
+  --gray-ink: #ecedef;
+  --side: #111317;
+  --side-ink: #ecedef;
+  --side-muted: #8b909a;
+  --side-active: #2a2e37;
+  --side-field: #22262e;
+  --side-line: #2a2e37;
+  --side-accent: #ff6b57;
+  --panel: #111317;
+  --panel-tile: #22262e;
+  --focus: #ff6b57;
+}
+
 @theme inline {
   --color-bg: var(--bg);
   --color-surface: var(--surface);
@@ -126,6 +249,7 @@
   --color-on-accent: var(--on-accent);
   --color-accent-soft: var(--accent-soft);
   --color-accent-ink: var(--accent-ink);
+  --color-accent-pop: var(--accent-pop);
   --color-link: var(--link);
   --color-warn: var(--warn);
   --color-warn-soft: var(--warn-soft);
@@ -146,6 +270,8 @@
   --color-side-field: var(--side-field);
   --color-side-line: var(--side-line);
   --color-side-accent: var(--side-accent);
+  --color-panel: var(--panel);
+  --color-panel-tile: var(--panel-tile);
   --color-focus: var(--focus);
   --font-sans: var(--font-sans);
   --font-display: var(--font-display);
@@ -166,4 +292,97 @@ h3 {
 :focus-visible {
   outline: 2px solid var(--focus);
   outline-offset: 2px;
+}
+
+/* ---- scroll-reveal + micro-interactions (landing page) ---- */
+
+.hover-lift {
+  transition: transform 0.25s cubic-bezier(0.2, 0.7, 0.2, 1), box-shadow 0.25s ease;
+}
+.hover-lift:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(10, 30, 25, 0.1);
+}
+
+.rv {
+  opacity: 0;
+  transform: translateY(18px);
+}
+.rv.in {
+  opacity: 1;
+  transform: none;
+  transition: opacity 0.6s cubic-bezier(0.2, 0.7, 0.2, 1) var(--d, 0ms), transform 0.7s cubic-bezier(0.16, 1, 0.3, 1) var(--d, 0ms);
+}
+
+@keyframes hero-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.hero-in {
+  animation: hero-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation-delay: var(--d, 0ms);
+}
+
+.scroll-progress {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: var(--accent);
+  transform: scaleX(0);
+  transform-origin: 0 50%;
+  z-index: 40;
+  opacity: 0;
+  transition: opacity 0.25s;
+}
+.scroll-progress.on {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hover-lift,
+  .hover-lift:hover {
+    transform: none;
+    transition: none;
+  }
+  .rv {
+    opacity: 1;
+    transform: none;
+  }
+  .rv.in {
+    transition: none;
+  }
+  .hero-in {
+    animation: none;
+  }
+}
+
+/* RotatingWords "letters" variant: each letter drops in from above. */
+@keyframes letter-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-60%);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.letter-drop {
+  display: inline-block;
+  opacity: 0;
+  animation: letter-drop 450ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .letter-drop {
+    animation: none;
+    opacity: 1;
+  }
 }
